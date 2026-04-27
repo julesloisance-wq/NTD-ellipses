@@ -1,0 +1,14 @@
+{
+  "folder_path": "/Users/julesloisance/Desktop/StageHelsinki/MoEDAL_Data_Apr2025/",
+  "element": "O1_L8_ME18_UD1",
+  "save_folder": "/Users/julesloisance/Desktop/StageHelsinki/CelianCodeResults/",
+  "num_columns": 3,
+  "num_rows": 4,
+  "step": 3,
+  "crop_width_X": 655,
+  "crop_height_Y": 295,
+  "min_intensity": 0,
+  "max_intensity": 130,
+  "pixel_resolution": 1.75,
+  "angle_tolerance": 5
+}
