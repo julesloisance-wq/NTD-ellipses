@@ -41,12 +41,12 @@ def export_highlighted_mosaic(image_path, ellipses_data, base_name, save_folder)
         center = (int(e["x"]), int(original_y))
         
         # Notebook logic: Green circle for all valid angles
-        radius_green = int(max(e["major"], e["minor"]) * 3)
+        radius_green = int(max(e["major_axis"], e["minor_axis"]) * 3)
         cv2.circle(img_color, center, radius_green, (0, 200, 0), 10)  # Green in BGR
         
         # Notebook logic: Red circle on top if intensity is also correct
         if e["category"] == "red":
-            radius_red = int((e["major"] + e["minor"]) * 5)
+            radius_red = int((e["major_axis"] + e["minor_axis"]) * 5)
             cv2.circle(img_color, center, radius_red, (0, 0, 255), 10)  # Red in BGR
 
     filename = f"{base_name}_highlighted.png"
@@ -59,7 +59,7 @@ def export_histogram(all_ellipses_data, element, save_folder):
 
     ellipse_areas = []
     for ellipse in all_ellipses_data:
-        area = math.pi * (ellipse["major"] / 2.0) * (ellipse["minor"] / 2.0)
+        area = math.pi * (ellipse["major_axis"] / 2.0) * (ellipse["minor_axis"] / 2.0)
         ellipse_areas.append(area)
 
     plt.figure(figsize=(12, 6))
@@ -71,5 +71,32 @@ def export_histogram(all_ellipses_data, element, save_folder):
     plt.tight_layout()
     
     filename = f"histo_areas_{element}.png"
+    plt.savefig(os.path.join(save_folder, filename))
+    plt.close()
+
+def export_mosaics_histogram(mosaic_counts, element_name, save_folder, min_int, max_int, angle_tol):
+    """Generates a bar chart showing the number of valid ellipses (angle + intensity) per mosaic."""
+    if not mosaic_counts:
+        return
+
+    # Sort the dictionary keys to ensure the X-axis is logically ordered
+    sorted_names = sorted(mosaic_counts.keys())
+    counts = [mosaic_counts[name] for name in sorted_names]
+
+    plt.figure(figsize=(14, 6))
+    plt.bar(sorted_names, counts, color='skyblue', edgecolor='black')
+    plt.xticks(rotation=45, ha='right')
+    plt.xlabel("Mosaic name")
+    plt.ylabel("Number of valid ellipses (Red)")
+    
+    # Explicit title demonstrating the dual filtering
+    title = (f"Histogram of valid ellipses per mosaic ({element_name})\n"
+             f"Filtered by Intensity ∈ [{min_int}, {max_int}] & Optimal Angle ±{angle_tol}°")
+    plt.title(title)
+    
+    plt.tight_layout()
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    filename = f"Histogram_ellipses_valid_{element_name}.png"
     plt.savefig(os.path.join(save_folder, filename))
     plt.close()
