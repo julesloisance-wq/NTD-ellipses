@@ -37,8 +37,8 @@ def export_highlighted_mosaic(image_path, ellipses_data, base_name, save_folder)
     img_color = cv2.imread(image_path, cv2.IMREAD_COLOR)
     
     for e in ellipses_data:
-        original_y = img_color.shape[0] - e["y"]
-        center = (int(e["x"]), int(original_y))
+        original_y = img_color.shape[0] - e["y_local"]
+        center = (int(e["x_local"]), int(original_y))
         
         # Notebook logic: Green circle for all valid angles
         radius_green = int(max(e["major_axis"], e["minor_axis"]) * 3)
@@ -98,5 +98,36 @@ def export_mosaics_histogram(mosaic_counts, element_name, save_folder, min_int, 
     plt.grid(True, linestyle='--', alpha=0.5)
 
     filename = f"Histogram_ellipses_valid_{element_name}.png"
+    plt.savefig(os.path.join(save_folder, filename))
+    plt.close()
+
+def export_global_heatmap(all_ellipses_data, element_name, save_folder):
+    """Generates a 2D spatial density heatmap of all detected craters."""
+    if not all_ellipses_data:
+        return
+
+    # Extract the global coordinates of all valid craters
+    # Using .get() to safely handle both "x_global_um" and the older "x_global_µm" keys
+    x_coords = [e.get("x_global_um", e.get("x_global_µm", 0)) for e in all_ellipses_data]
+    y_coords = [e.get("y_global_um", e.get("y_global_µm", 0)) for e in all_ellipses_data]
+
+    plt.figure(figsize=(10, 8))
+    
+    # Create the 2D histogram (heatmap)
+    # bins=50 divides the space into a 50x50 grid
+    # cmap='inferno' is a standard scientific color map for density visualization
+    h = plt.hist2d(x_coords, y_coords, bins=50, cmap='inferno')
+    plt.colorbar(h[3], label='Number of craters per sector')
+    
+    plt.xlabel("Global X Position (µm)")
+    plt.ylabel("Global Y Position (µm)")
+    plt.title(f"Global Density Heatmap of Craters - {element_name}")
+    
+    # Invert Y-axis to match standard image coordinate systems (0,0 at top-left)
+    plt.gca().invert_yaxis()
+    
+    plt.tight_layout()
+    
+    filename = f"Heatmap_Density_{element_name}.png"
     plt.savefig(os.path.join(save_folder, filename))
     plt.close()

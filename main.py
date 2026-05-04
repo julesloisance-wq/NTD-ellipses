@@ -1,17 +1,20 @@
 import json
 import glob
+import re
+import cv2
+import numpy as np
 import os
 import concurrent.futures
 from image_processing import process_and_build_mosaics
 from ellipse_detection import get_reference_center, analyze_ellipses
-from data_export import export_json, export_histogram, export_angle_histogram_from_bins, export_highlighted_mosaic, export_mosaics_histogram
+from data_export import export_json, export_histogram, export_angle_histogram_from_bins, export_highlighted_mosaic, export_mosaics_histogram, export_global_heatmap
 
-def process_single_mosaic(mosaic_path, config, ref_x0, ref_y0, save_folder):
+def process_single_mosaic(mosaic_path, config, ref_x0, ref_y0, i_ref, j_ref, mosaic_width, mosaic_height, save_folder):
     """
     Processes a single mosaic and exports its specific files. 
     Extracted as an independent function to enable multiprocessing.
     """
-    ellipses_data, ellipse_histogram, dominant_angle = analyze_ellipses(mosaic_path, config, ref_x0, ref_y0)
+    ellipses_data, ellipse_histogram, dominant_angle = analyze_ellipses(mosaic_path, config, ref_x0, ref_y0, i_ref, j_ref, mosaic_width, mosaic_height)
     
     # Filter to retain only 'red' category for JSON export and area histogram
     red_ellipses = [e for e in ellipses_data if e["category"] == "red"]
@@ -54,6 +57,19 @@ def main():
     ref_x0, ref_y0 = get_reference_center(ref_mosaic_path)
     print(f"Reference point selected at coordinates: x={ref_x0}, y={ref_y0}")
  
+    # Extract mosaic indices from the reference mosaic name to calculate global coordinates later
+    match_ref = re.search(r"Mosaic_(\d+)_(\d+)", ref_mosaic_name)
+    if match_ref:
+        i_ref = int(match_ref.group(1))
+        j_ref = int(match_ref.group(2))
+    else:
+        raise ValueError("Reference mosaic name does not match expected pattern 'Mosaic_i_j.png'.")
+
+    # Retrieve mosaic dimensions from the reference image to calculate global coordinates later
+    ref_img = cv2.imread(ref_mosaic_path, cv2.IMREAD_GRAYSCALE)
+    mosaic_height, mosaic_width = ref_img.shape[:2]
+    print(f"Mosaic dimensions detected: {mosaic_width}x{mosaic_height} pixels")
+
     # 3. PARALLEL DETECTION ON ALL MOSAICS
     mosaic_files = glob.glob(os.path.join(save_folder, "Mosaic_*.png"))
     global_red_ellipses_data = []
@@ -65,7 +81,7 @@ def main():
     with concurrent.futures.ProcessPoolExecutor() as executor:
         # Submit tasks to the executor
         futures = [
-            executor.submit(process_single_mosaic, path, config, ref_x0, ref_y0, save_folder)
+            executor.submit(process_single_mosaic, path, config, ref_x0, ref_y0, i_ref, j_ref, mosaic_width, mosaic_height, save_folder)
             for path in mosaic_files
         ]
         
@@ -92,6 +108,9 @@ def main():
         config["max_intensity"], 
         angle_tolerance
     )
+
+    print("Generating global spatial heatmap...")
+    export_global_heatmap(global_red_ellipses_data, config["element"], save_folder)
 
     print("Processing completed successfully.")
 

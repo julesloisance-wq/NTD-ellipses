@@ -3,6 +3,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import os
+import re
 
 
 def get_reference_center(image_path):
@@ -25,7 +26,7 @@ def get_reference_center(image_path):
     fig, ax = plt.subplots(figsize=(12, 8))
     ax.imshow(img, cmap='gray')
     cid = fig.canvas.mpl_connect('button_press_event', on_click_center)
-    plt.title("Cliquez pour marquer le centre du trou")
+    plt.title("Click on the center of the hole")
     plt.show()
 
     if not clicked_coords:
@@ -36,7 +37,7 @@ def get_reference_center(image_path):
     return x0, y0
 
 
-def analyze_ellipses(image_path, config, ref_x0, ref_y0):
+def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, mosaic_width, mosaic_height):
     min_intensity = config["min_intensity"]
     max_intensity = config["max_intensity"]
     green_threshold = 170
@@ -48,6 +49,15 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0):
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                    cv2.THRESH_BINARY_INV, 15, 10)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Extract mosaic indices from the current mosaic name to calculate global coordinates later
+    base_name = os.path.basename(image_path)
+    match = re.search(r"Mosaic_(\d+)_(\d+)", base_name)
+    if match:
+        i_current = int(match.group(1))
+        j_current = int(match.group(2))
+    else:
+        i_current, j_current = i_ref, j_ref
 
     # 1. Angular histogram calculation
     num_bins = 360 // 5
@@ -97,19 +107,25 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0):
                     category = "red"
                 
                 inverted_cy = img.shape[0] - e["cy"]
-                x_relatif = e["cx"] - ref_x0
-                y_relatif = inverted_cy - ref_y0
+                ref_x0_global = ref_x0 + (config["num_columns"] - j_ref) * mosaic_width
+                ref_y0_global = (mosaic_height - ref_y0) + (config["num_rows"] - i_ref) * mosaic_height
+                x_global = e["cx"] + (config["num_columns"] - j_current) * mosaic_width - ref_x0_global
+                y_global = (config["num_rows"] - i_current) * mosaic_height + (mosaic_height - inverted_cy) - ref_y0_global
+                x_global_um = x_global * config["pixel_resolution"]
+                y_global_um = y_global * config["pixel_resolution"]
                 
                 ellipses_data.append({
                     "category": category,
-                    "x": round(e["cx"], 2),
-                    "y": round(inverted_cy, 2),
+                    "x_local": round(e["cx"], 2),
+                    "y_local": round(inverted_cy, 2),
+                    "x_global": round(x_global, 2),
+                    "y_global": round(y_global, 2),
+                    "x_global_um": round(x_global_um, 2),
+                    "y_global_um": round(y_global_um, 2),
                     "intensity": round(e["intensity"], 2),
                     "major_axis": round(e["major"], 2),
                     "minor_axis": round(e["minor"], 2),
-                    "angle": round(e["angle"], 2),
-                    "x_relative": round(x_relatif, 2),
-                    "y_relative": round(y_relatif, 2)
+                    "angle": round(e["angle"], 2)
                 })
 
     return ellipses_data, ellipse_histogram, dominant_angle
