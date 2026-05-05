@@ -37,95 +37,128 @@ def get_reference_center(image_path):
     return x0, y0
 
 
-def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, mosaic_width, mosaic_height):
-    min_intensity = config["min_intensity"]
-    max_intensity = config["max_intensity"]
-    green_threshold = 170
+def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width, img_height):
+   """
+   Detects and analyzes ellipses in a single raw image using the Green Channel,
+   Canny Edge Detection, and Morphological filtering.
+   """
+   # 1. Extract grid coordinates (i, j) from the filename
+   filename = os.path.basename(image_path)
+   match = re.search(r"MoEDAL-(\d{3})-(\d{3})\.png", filename)
+   if not match:
+       raise ValueError(f"Filename {filename} does not match expected pattern.")
+  
+   i_current = int(match.group(1))
+   j_current = int(match.group(2))
 
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    
-    # Preprocessing identical to the original notebook
-    blurred = cv2.GaussianBlur(img, (5, 5), 0)
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv2.THRESH_BINARY_INV, 15, 10)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Extract mosaic indices from the current mosaic name to calculate global coordinates later
-    base_name = os.path.basename(image_path)
-    match = re.search(r"Mosaic_(\d+)_(\d+)", base_name)
-    if match:
-        i_current = int(match.group(1))
-        j_current = int(match.group(2))
-    else:
-        i_current, j_current = i_ref, j_ref
+   # 2. Load image and extract the Green Channel
+   # OpenCV loads images in BGR format. Index 1 is Green.
+   img_color = cv2.imread(image_path, cv2.IMREAD_COLOR)
+   green_channel = img_color[:, :, 1]
 
-    # 1. Angular histogram calculation
-    num_bins = 360 // 5
-    ellipse_histogram = np.zeros(num_bins, dtype=int)
-    
-    valid_contours_data = []
-    
-    for cnt in contours:
-        if len(cnt) >= 5:
-            ellipse = cv2.fitEllipse(cnt)
-            (cx, cy), (major, minor), angle = ellipse
-            
-            if math.isnan(major) or math.isnan(minor):
-                continue
 
-            # Mean intensity calculation
-            mask = np.zeros_like(img, dtype=np.uint8)
-            cv2.ellipse(mask, ellipse, (255,), thickness=-1)
-            masked_pixels = img[mask == 255]
-            mean_intensity = np.mean(masked_pixels) if masked_pixels.size > 0 else 0
-            
-            valid_contours_data.append({
-                "cx": cx, "cy": cy, "major": major, "minor": minor, 
-                "angle": angle, "intensity": mean_intensity
-            })
+   # 3. Apply Gaussian Blur to reduce high-frequency noise
+   blurred = cv2.GaussianBlur(green_channel, (5, 5), 0)
 
-            # Intensity filtering for histogram construction
-            if min_intensity <= mean_intensity <= max_intensity:
-                bin_index = int(angle // 5) % num_bins
-                ellipse_histogram[bin_index] += 1
 
-    # Dominant angle extraction
-    dominant_bin_index = int(np.argmax(ellipse_histogram))
-    dominant_angle = dominant_bin_index * 5
-    print(f"🧭 Dominant angle for {os.path.basename(image_path)}: {dominant_angle}°")
+   # 4. Canny Edge Detection
+   # Detects sharp changes in intensity (edges) instead of global thresholds
+   # Thresholds can be adjusted in config later (e.g., 30, 100)
+   edges = cv2.Canny(blurred, threshold1=30, threshold2=100)
 
-    # 2. Filtering and classification
-    ellipses_data = []
-    
-    for e in valid_contours_data:
-        # Exact angle condition from the notebook
-        if dominant_angle <= e["angle"] <= dominant_angle + 5:
-            if e["intensity"] < green_threshold:
-                
-                category = "green"
-                if min_intensity <= e["intensity"] <= max_intensity:
-                    category = "red"
-                
-                inverted_cy = img.shape[0] - e["cy"]
-                ref_x0_global = ref_x0 + (config["num_columns"] - j_ref) * mosaic_width
-                ref_y0_global = (mosaic_height - ref_y0) + (config["num_rows"] - i_ref) * mosaic_height
-                x_global = e["cx"] + (config["num_columns"] - j_current) * mosaic_width - ref_x0_global
-                y_global = (config["num_rows"] - i_current) * mosaic_height + (mosaic_height - inverted_cy) - ref_y0_global
-                x_global_um = x_global * config["pixel_resolution"]
-                y_global_um = y_global * config["pixel_resolution"]
-                
-                ellipses_data.append({
-                    "category": category,
-                    "x_local": round(e["cx"], 2),
-                    "y_local": round(inverted_cy, 2),
-                    "x_global": round(x_global, 2),
-                    "y_global": round(y_global, 2),
-                    "x_global_um": round(x_global_um, 2),
-                    "y_global_um": round(y_global_um, 2),
-                    "intensity": round(e["intensity"], 2),
-                    "major_axis": round(e["major"], 2),
-                    "minor_axis": round(e["minor"], 2),
-                    "angle": round(e["angle"], 2)
-                })
 
-    return ellipses_data, ellipse_histogram, dominant_angle
+   # 5. Find contours on the detected edges
+   contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+
+   ellipses_data = []
+  
+   # Histogram setup (72 bins of 5 degrees)
+   num_bins = int(360 / 5)
+   ellipse_histogram = np.zeros(num_bins, dtype=int)
+  
+   pixel_resolution = config.get("pixel_resolution", 1.75) # Default 1.75 µm/px
+   min_area = config.get("min_area", 20) # Minimum area in pixels to consider (to filter out noise)
+   max_area = config.get("max_area", 500) # Maximum area in pixels to consider (to filter out large artifacts)
+
+
+   for cnt in contours:
+       # An ellipse needs at least 5 points to be mathematically fitted
+       if len(cnt) < 5:
+           continue
+
+
+       area = cv2.contourArea(cnt)
+       if not (min_area <= area <= max_area):
+           continue
+
+
+       # 6. Morphological Filter: Circularity
+       # Perfect circle = 1.0. A long scratch will be close to 0.1
+       perimeter = cv2.arcLength(cnt, True)
+       if perimeter == 0:
+           continue
+      
+       circularity = 4 * np.pi * (area / (perimeter * perimeter))
+       # Reject long traces/scratches (e.g., circularity < 0.4)
+       if circularity < 0.4:
+           continue
+
+
+       # 7. Fit Ellipse
+       ellipse = cv2.fitEllipse(cnt)
+       (local_x, local_y), (minor_axis, major_axis), angle = ellipse
+       local_y = img_height - local_y  # Invert Y
+  
+       # 8. Check internal intensity to categorize (using the green channel)
+       mask = np.zeros_like(green_channel, dtype=np.uint8)
+       cv2.ellipse(mask, ellipse, (255,), thickness=-1)
+       masked_pixels = green_channel[mask == 255]
+       mean_intensity = np.mean(masked_pixels) if masked_pixels.size > 0 else 0
+
+
+       # Categorize
+       if config["min_intensity"] <= mean_intensity <= config["max_intensity"]:
+           category = "red"
+           # Add to histogram
+           bin_index = int(angle // 5) % num_bins
+           ellipse_histogram[bin_index] += 1
+       else:
+           continue # Too bright, ignore
+
+
+       # 9. Spatial Geometry: Convert local pixels to Global Micrometers
+       # We calculate how many pixels away this image is from the reference image
+       # Assuming i = columns (X-axis) and j = rows (Y-axis) based on standard grid
+       # with bottom right as (j=0,i=0) and top left as (x_global=0,y_global=0)
+       global_x_pixels = (j_ref - j_current) * img_width + local_x - ref_x0
+       global_y_pixels = (i_ref - i_current) * img_height + local_y - ref_y0
+
+
+       # Convert to micrometers
+       global_x_um = global_x_pixels * pixel_resolution
+       global_y_um = global_y_pixels * pixel_resolution
+
+
+       ellipses_data.append({
+           "local_x": float(local_x),
+           "local_y": float(local_y),
+           "x_um": float(global_x_um),
+           "y_um": float(global_y_um),
+           "minor_axis_um": float(minor_axis * pixel_resolution),
+           "major_axis_um": float(major_axis * pixel_resolution),
+           "area_um2": float(area * (pixel_resolution ** 2)),
+           "angle": float(angle),
+           "mean_intensity": float(mean_intensity),
+           "circularity": float(circularity),
+           "category": category,
+           "image_source": filename
+       })
+
+
+   # Find the dominant angle for this specific raw image
+   dominant_angle = float(np.argmax(ellipse_histogram) * 5) if np.sum(ellipse_histogram) > 0 else 0.0
+
+
+   return ellipses_data, ellipse_histogram, dominant_angle
