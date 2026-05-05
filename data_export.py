@@ -12,14 +12,14 @@ def export_json(data, filename, save_folder):
         json.dump(data, f, indent=4)
 
 def export_angle_histogram_from_bins(ellipse_histogram, element_name, base_name, save_folder):
-    """Generates the angle histogram using 5-degree bins."""
+    """Generates the angle histogram using 5-degree bins for a single image."""
     angle_bins = np.arange(0, 360, 5)
     
     plt.figure(figsize=(12, 6))
     plt.bar(angle_bins, ellipse_histogram, width=5, align='edge', color='skyblue', edgecolor='black')
     plt.xlabel("Ellipse angle (°)")
     plt.ylabel("Number of relevant ellipses")
-    plt.title(f"Histogram of ellipses by angle interval – {element_name}")
+    plt.title(f"Histogram of ellipses by angle interval – {element_name} ({base_name})")
     plt.xticks(np.arange(0, 361, 30))
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
@@ -28,43 +28,59 @@ def export_angle_histogram_from_bins(ellipse_histogram, element_name, base_name,
     plt.savefig(os.path.join(save_folder, filename))
     plt.close()
 
-def export_highlighted_mosaic(image_path, ellipses_data, base_name, save_folder):
-    """Draws highlighted circles replicating the notebook's exact dimensions."""
+def export_highlighted_image(image_path, ellipses_data, base_name, save_folder):
+    """
+    Draws highlighted circles on the raw image to visually verify detections.
+    Converts physical micrometers back to local pixels for drawing.
+    """
     if not ellipses_data:
         return
 
-    # OpenCV loads images in BGR format
+    # Load the raw image
     img_color = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    img_height = img_color.shape[0]
     
+    # We need the config to know the pixel resolution for unit conversion
+    try:
+        with open('config.json', 'r') as f:
+            config = json.load(f)
+        pixel_res = config.get("pixel_resolution", 1.75)
+    except FileNotFoundError:
+        pixel_res = 1.75 # Fallback default
+
     for e in ellipses_data:
-        original_y = img_color.shape[0] - e["y_local"]
-        center = (int(e["x_local"]), int(original_y))
+        # Re-invert Y locally for OpenCV drawing (which expects origin at top-left)
+        cv_y = int(img_height - e["local_y"])
+        cv_x = int(e["local_x"])
+        center = (cv_x, cv_y)
         
-        # Notebook logic: Green circle for all valid angles
-        radius_green = int(max(e["major_axis"], e["minor_axis"]) * 3)
-        cv2.circle(img_color, center, radius_green, (0, 200, 0), 10)  # Green in BGR
+        # Convert axes from µm back to pixels for drawing
+        major_px = e["major_axis_um"] / pixel_res
+        minor_px = e["minor_axis_um"] / pixel_res
         
-        # Notebook logic: Red circle on top if intensity is also correct
+        # Green circle for all geometrically valid ellipses
+        radius_green = int(max(major_px, minor_px) * 3)
+        cv2.circle(img_color, center, radius_green, (0, 200, 0), 2)  # Thickness reduced to 2 for raw images
+        
+        # Red circle on top if intensity confirms it's a deep crater
         if e["category"] == "red":
-            radius_red = int((e["major_axis"] + e["minor_axis"]) * 5)
-            cv2.circle(img_color, center, radius_red, (0, 0, 255), 10)  # Red in BGR
+            radius_red = int((major_px + minor_px) * 5)
+            cv2.circle(img_color, center, radius_red, (0, 0, 255), 2)
 
     filename = f"{base_name}_highlighted.png"
     cv2.imwrite(os.path.join(save_folder, filename), img_color)
 
 def export_histogram(all_ellipses_data, element, save_folder):
-    """Generates the area histogram for relevant ellipses."""
+    """Generates the area histogram for relevant ellipses in square micrometers."""
     if not all_ellipses_data:
         return
 
-    ellipse_areas = []
-    for ellipse in all_ellipses_data:
-        area = math.pi * (ellipse["major_axis"] / 2.0) * (ellipse["minor_axis"] / 2.0)
-        ellipse_areas.append(area)
+    # Extract the area directly in µm² (already calculated by the detection logic)
+    ellipse_areas = [ellipse["area_um2"] for ellipse in all_ellipses_data]
 
     plt.figure(figsize=(12, 6))
     plt.hist(ellipse_areas, bins=30, color='mediumseagreen', edgecolor='black')
-    plt.xlabel("Ellipse area (pixels²)")
+    plt.xlabel("Ellipse area (µm²)") # Updated unit
     plt.ylabel("Number of ellipses")
     plt.title(f"Histogram of areas of relevant ellipses - {element}")
     plt.grid(True, linestyle='--', alpha=0.5)
@@ -74,23 +90,23 @@ def export_histogram(all_ellipses_data, element, save_folder):
     plt.savefig(os.path.join(save_folder, filename))
     plt.close()
 
-def export_mosaics_histogram(mosaic_counts, element_name, save_folder, min_int, max_int, angle_tol):
-    """Generates a bar chart showing the number of valid ellipses (angle + intensity) per mosaic."""
-    if not mosaic_counts:
+def export_valid_ellipses_histogram(image_counts, element_name, save_folder, min_int, max_int, angle_tol):
+    """Generates a bar chart showing the number of valid ellipses per raw image."""
+    if not image_counts:
         return
 
     # Sort the dictionary keys to ensure the X-axis is logically ordered
-    sorted_names = sorted(mosaic_counts.keys())
-    counts = [mosaic_counts[name] for name in sorted_names]
+    sorted_names = sorted(image_counts.keys())
+    counts = [image_counts[name] for name in sorted_names]
 
     plt.figure(figsize=(14, 6))
     plt.bar(sorted_names, counts, color='skyblue', edgecolor='black')
     plt.xticks(rotation=45, ha='right')
-    plt.xlabel("Mosaic name")
+    plt.xlabel("Raw Image Name") # Updated label
     plt.ylabel("Number of valid ellipses (Red)")
     
     # Explicit title demonstrating the dual filtering
-    title = (f"Histogram of valid ellipses per mosaic ({element_name})\n"
+    title = (f"Histogram of valid ellipses per image ({element_name})\n"
              f"Filtered by Intensity ∈ [{min_int}, {max_int}] & Optimal Angle ±{angle_tol}°")
     plt.title(title)
     
@@ -106,10 +122,9 @@ def export_global_heatmap(all_ellipses_data, element_name, save_folder):
     if not all_ellipses_data:
         return
 
-    # Extract the global coordinates of all valid craters
-    # Using .get() to safely handle both "x_global_um" and the older "x_global_µm" keys
-    x_coords = [e.get("x_global_um", e.get("x_global_µm", 0)) for e in all_ellipses_data]
-    y_coords = [e.get("y_global_um", e.get("y_global_µm", 0)) for e in all_ellipses_data]
+    # Extract the new global coordinates in micrometers
+    x_coords = [e["x_um"] for e in all_ellipses_data]
+    y_coords = [e["y_um"] for e in all_ellipses_data]
 
     plt.figure(figsize=(10, 8))
     
@@ -123,8 +138,8 @@ def export_global_heatmap(all_ellipses_data, element_name, save_folder):
     plt.ylabel("Global Y Position (µm)")
     plt.title(f"Global Density Heatmap of Craters - {element_name}")
     
-    # Invert Y-axis to match standard image coordinate systems (0,0 at top-left)
-    plt.gca().invert_yaxis()
+    # Note: plt.gca().invert_yaxis() was removed here because we already inverted 
+    # the local Y axis in ellipse_detection.py to match a standard Cartesian plane.
     
     plt.tight_layout()
     
