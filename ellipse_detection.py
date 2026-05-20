@@ -1,38 +1,116 @@
 import cv2
 import numpy as np
-import re
-import math
 import os
+import glob
+import json
+import re
 
-def get_reference_center(image_path):
+def detect_reference_holes(target_dir, config):
     """
-    Opens the reference image and allows the user to click on the reference hole.
-    Returns the (x, y) coordinates of the click.
+    Scans the target directory for reference holes using cv2.HoughCircles.
+    Caches the results in reference_holes.json to avoid rescanning.
+    Returns a dictionary of found holes: { 'filename': {'x': cx, 'y': cy, 'radius': r} }
     """
-    # Load image in color to display it nicely, or grayscale. We use color here.
-    img = cv2.imread(image_path)
-    if img is None:
-        raise FileNotFoundError(f"Cannot load reference image: {image_path}")
+    cache_path = os.path.join(target_dir, "reference_holes.json")
+    if os.path.exists(cache_path):
+        print(f"Loading reference holes from cache: {cache_path}")
+        with open(cache_path, 'r') as f:
+            return json.load(f)
 
-    ref_point = []
-
-    def click_event(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            ref_point.append((x, y))
-            cv2.circle(img, (x, y), 5, (0, 0, 255), -1)
-            cv2.imshow("Reference Image", img)
-
-    cv2.imshow("Reference Image", img)
-    cv2.setMouseCallback("Reference Image", click_event)
+    print("Scanning images for reference holes (this may take a minute)...")
+    reference_holes = {}
     
-    print("Please click on the center of the reference hole, then press any key.")
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-    if not ref_point:
-        raise ValueError("No reference point was selected.")
+    # We look at all png files
+    image_files = sorted(glob.glob(os.path.join(target_dir, "MoEDAL-*.png")))
+    
+    for img_path in image_files:
+        img_name = os.path.basename(img_path)
+        img_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        if img_gray is None:
+            continue
+            
+        # 1. Threshold to find bright regions (plastic is ~215, background light is > 230)
+        # We use 190 to separate the bright plastic/holes from the black jagged border (< 100)
+        _, thresh = cv2.threshold(img_gray, 190, 255, cv2.THRESH_BINARY)
         
-    return ref_point[0]
+        # 2. Find all contours of these bright regions
+        contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        
+        h, w = img_gray.shape
+        best_circle = None
+        best_score = -1.0
+        best_mean = 0.0
+        
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            # Filter out tiny noise and the massive contour of the whole plastic sheet
+            if 5000 < area < (h * w * 0.5):
+                # Extract points strictly inside the image to avoid fitting the straight image borders
+                curve_points = []
+                for p in cnt:
+                    px, py = p[0]
+                    if px > 5 and px < w - 5 and py > 5 and py < h - 5:
+                        curve_points.append(p)
+                
+                # Fit an ellipse to the jagged curved boundary
+                if len(curve_points) >= 5:
+                    curve_points = np.array(curve_points)
+                    (cx_f, cy_f), (MA, ma), angle = cv2.fitEllipse(curve_points)
+                    
+                    cx, cy = int(cx_f), int(cy_f)
+                    r = int((MA + ma) / 4)  # Average of major and minor axes to get radius
+                    
+                    # Ensure the radius is within reasonable bounds for a reference hole (small or giant)
+                    if 100 <= r <= 800:
+                        # ── RIGOROUS VISUAL VALIDATION (ANGULAR SPREAD) ─────────────────────
+                        
+                        y_min, y_max = max(0, cy - r - 40), min(h, cy + r + 40)
+                        x_min, x_max = max(0, cx - r - 40), min(w, cx + r + 40)
+                        roi_gray = img_gray[y_min:y_max, x_min:x_max]
+                        
+                        if roi_gray.size == 0: continue
+                        
+                        local_cy = cy - y_min
+                        local_cx = cx - x_min
+                        ys, xs = np.ogrid[:roi_gray.shape[0], :roi_gray.shape[1]]
+                        d2 = (xs - local_cx)**2 + (ys - local_cy)**2
+                        
+                        # Check interior brightness
+                        interior_mask = d2 < (r - 20)**2
+                        mean_interior = float(np.mean(roi_gray[interior_mask])) if np.any(interior_mask) else 0.0
+                        if mean_interior <= 180: continue
+                        
+                        # Validate the angular spread of the dark torn plastic ring
+                        annulus_mask = (d2 >= (r - 10)**2) & (d2 <= (r + 30)**2)
+                        dark_pixels_mask = (roi_gray < 100) & annulus_mask
+                        
+                        dark_ys, dark_xs = np.where(dark_pixels_mask)
+                        angular_spread = 0
+                        
+                        if len(dark_xs) > 0:
+                            angles = np.degrees(np.arctan2(dark_ys - local_cy, dark_xs - local_cx))
+                            angles = (angles + 360) % 360
+                            unique_degrees = np.unique(angles.astype(int))
+                            angular_spread = len(unique_degrees)
+                            
+                        # A true reference hole has a jagged black border covering at least 60 degrees
+                        if angular_spread > 60:
+                            # We keep the one with the thickest/most complete black border
+                            if angular_spread > best_score:
+                                best_score = angular_spread
+                                best_circle = (cx, cy, r)
+                                best_mean = mean_interior
+        
+        if best_circle is not None:
+            cx, cy, r = best_circle
+            reference_holes[img_name] = {"x": cx, "y": cy, "radius": r}
+            print(f"  -> Valid reference hole found in {img_name} at ({cx}, {cy}) r={r} [Interior={best_mean:.1f}, Spread={best_score}°]")
+
+    # Save to cache
+    with open(cache_path, 'w') as f:
+        json.dump(reference_holes, f, indent=4)
+        
+    return reference_holes
 
 def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width, img_height):
     """
@@ -45,8 +123,8 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
     if not match:
         raise ValueError(f"Filename {filename} does not match expected pattern.")
     
-    i_current = int(match.group(1))
-    j_current = int(match.group(2))
+    j_current = int(match.group(1))
+    i_current = int(match.group(2))
 
     # 2. Load image and extract the Green Channel
     # OpenCV loads images in BGR format. Index 1 is Green.
@@ -58,8 +136,10 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
 
     # 4. Canny Edge Detection
     # Detects sharp changes in intensity (edges) instead of global thresholds
-    # Thresholds can be adjusted in config later (e.g., 30, 100)
-    edges = cv2.Canny(blurred, threshold1=30, threshold2=100)
+    # Thresholds are calculated based on the median of the pixel intensities to adapt to varying lighting conditions
+    lower = int(max(0, np.median(blurred) * 0.66))
+    upper = int(max(0, np.median(blurred) * 1.33))
+    edges = cv2.Canny(blurred, threshold1=lower, threshold2=upper)
 
     # 5. Find contours on the detected edges
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

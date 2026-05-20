@@ -8,10 +8,6 @@ def get_grid_metadata(config):
     """
     folder_path = config["folder_path"]
     element = config["element"]
-    save_folder = os.path.join(config["save_folder"], element)
-    
-    # Create the save folder if it does not exist
-    os.makedirs(save_folder, exist_ok=True)
 
     # Regular expression to extract i and j indices from filenames
     pattern = re.compile(r'MoEDAL-(\d{3})-(\d{3})\.png') 
@@ -46,8 +42,6 @@ def get_grid_metadata(config):
         "i_max": i_max,
         "j_min": j_min,
         "j_max": j_max,
-        "save_folder": save_folder,
-        "target_dir": target_dir
     }
 
     return metadata

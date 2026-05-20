@@ -5,11 +5,39 @@ import math
 import matplotlib.pyplot as plt
 import json
 
-def export_json(data, filename, save_folder):
+def export_json(data, element, save_folder):
     """Exports a list of dictionaries to JSON format."""
-    filepath = os.path.join(save_folder, filename)
+    master_json = { 
+        "element_name" : element,
+        "images" : {}
+        }
+    
+    # Fill in the JSON with clear parent_mosaic structure
+    for ellipse in data:
+        img_name = ellipse["image_source"]
+        if img_name not in master_json["images"]:
+            master_json["images"][img_name] = {
+                "parent_mosaic": "tbd",
+                "ellipses": []
+            }
+        ellipse_wo_img_name = {k: v for k, v in ellipse.items() if k != "image_source"} # Remove redundant image name from each ellipse entry
+        master_json["images"][img_name]["ellipses"].append(ellipse_wo_img_name) 
+
+    def extract_coords(filename):
+        try:
+            parts = filename.replace(".png", "").split("-")
+            return int(parts[1]), int(parts[2])
+        except Exception:  
+            return 0, 0
+            
+    # Sort the dictionary keys to ensure the X-axis is logically ordered
+    master_json["images"] = dict(sorted(master_json["images"].items(), key=lambda item: extract_coords(item[0])))
+
+    filepath = os.path.join(save_folder, f"all_data_{element}.json")
     with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(master_json, f, indent=4)
+
+    print(f"Base de données JSON globale exportée : {filepath}")
 
 def export_angle_histogram_from_bins(ellipse_histogram, element_name, base_name, save_folder):
     """Generates the angle histogram using 5-degree bins for a single image."""
