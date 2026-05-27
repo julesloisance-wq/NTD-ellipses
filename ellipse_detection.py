@@ -40,6 +40,8 @@ def detect_reference_holes(target_dir, config):
         best_circle = None
         best_score = -1.0
         best_mean = 0.0
+
+        #! use intensity filters to filter out bolts --> clear lighting in the center of ref holes, darker in bolts
         
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -57,11 +59,44 @@ def detect_reference_holes(target_dir, config):
                     curve_points = np.array(curve_points)
                     (cx_f, cy_f), (MA, ma), angle = cv2.fitEllipse(curve_points)
                     
-                    cx, cy = int(cx_f), int(cy_f)
-                    r = int((MA + ma) / 4)  # Average of major and minor axes to get radius
+                    cx_f, cy_f = (cx_f, cy_f)
+                    r_avg = (MA + ma) / 4
+                    
+                    # --- HOUGH REFINEMENT FOR EXTREME PRECISION ---
+                    # fitEllipse shifts the center if the tearing is asymmetric (e.g., top missing).
+                    # To find the true physical center of the intact drilled edge, we use Hough on the pure boundary.
+                    mask = np.zeros_like(thresh)
+                    cv2.drawContours(mask, [cnt], -1, 255, 1)
+                    
+                    circles = cv2.HoughCircles(
+                        mask, 
+                        cv2.HOUGH_GRADIENT, 
+                        dp=1, 
+                        minDist=100, 
+                        param1=50, 
+                        param2=15, # Low threshold since the boundary is 1-pixel clean
+                        minRadius=int(max(50, r_avg * 0.7)), 
+                        maxRadius=int(r_avg * 1.3)
+                    )
+                    
+                    cx, cy, r = int(cx_f), int(cy_f), int(r_avg) + 20
+                    
+                    if circles is not None:
+                        circles = np.round(circles[0, :]).astype("int")
+                        # Pick the Hough circle closest to the robust fitEllipse center
+                        best_dist = float('inf')
+                        for (hx, hy, hr) in circles:
+                            dist = (hx - cx_f)**2 + (hy - cy_f)**2
+                            if dist < best_dist and dist < 10000: # Must be within ~100 pixels of approximate center
+                                best_dist = dist
+                                cx, cy = hx, hy
+                                r = hr
+                                
+                    # We still add ~10 pixels to the Hough radius to visually align with the outer dark boundary
+                    r = r + 10
                     
                     # Ensure the radius is within reasonable bounds for a reference hole (small or giant)
-                    if 100 <= r <= 800:
+                    if 300 <= r <= 500:
                         # ── RIGOROUS VISUAL VALIDATION (ANGULAR SPREAD) ─────────────────────
                         
                         y_min, y_max = max(0, cy - r - 40), min(h, cy + r + 40)
@@ -103,7 +138,7 @@ def detect_reference_holes(target_dir, config):
         
         if best_circle is not None:
             cx, cy, r = best_circle
-            reference_holes[img_name] = {"x": cx, "y": cy, "radius": r}
+            reference_holes[img_name] = {"x": int(cx), "y": int(cy), "radius": int(r)}
             print(f"  -> Valid reference hole found in {img_name} at ({cx}, {cy}) r={r} [Interior={best_mean:.1f}, Spread={best_score}°]")
 
     # Save to cache

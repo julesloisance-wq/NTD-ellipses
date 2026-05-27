@@ -9,6 +9,7 @@ import concurrent.futures
 from image_processing import get_grid_metadata
 from ellipse_detection import detect_reference_holes, analyze_ellipses
 from data_export import export_json, export_histogram, export_angle_histogram_from_bins, export_highlighted_image, export_valid_ellipses_histogram, export_global_heatmap
+from update_parent_mosaics import build_mosaic_mapping, patch_json
 
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
@@ -176,6 +177,11 @@ def main():
     # 4. GLOBAL EXPORTS
     print("Generating global JSON export for all red ellipses...")
     export_json(global_red_ellipses_data, element, save_folder)
+
+    print("Filling parent_mosaic fields...")
+    json_path = os.path.join(save_folder, f"all_data_{element}.json")
+    mapping = build_mosaic_mapping(target_dir)
+    patch_json(json_path, mapping)
 
     print("Generating global area histogram...")
     export_histogram(global_red_ellipses_data, config["element"], save_folder)
