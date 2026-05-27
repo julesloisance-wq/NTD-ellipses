@@ -1,3 +1,4 @@
+import csv
 import cv2
 import numpy as np
 import os
@@ -174,3 +175,57 @@ def export_global_heatmap(all_ellipses_data, element_name, save_folder):
     filename = f"Heatmap_Density_{element_name}.png"
     plt.savefig(os.path.join(save_folder, filename))
     plt.close()
+
+def export_csv(json_path, element, save_folder):
+    """
+    Reads the patched JSON and writes a flat CSV table: one row per ellipse.
+    Columns: image, parent_mosaic, then all ellipse fields.
+    Designed to be opened directly in Excel, LibreOffice or loaded with pandas.
+    """
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    fieldnames = [
+        'image', 'parent_mosaic',
+        'local_x', 'local_y', 'x_um', 'y_um',
+        'minor_axis_um', 'major_axis_um', 'area_um2',
+        'angle', 'mean_intensity', 'circularity', 'category'
+    ]
+
+    filepath = os.path.join(save_folder, f"all_data_{element}.csv")
+    with open(filepath, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for img_name, img_data in data['images'].items():
+            parent_mosaic = img_data.get('parent_mosaic', '')
+            for ellipse in img_data['ellipses']:
+                writer.writerow({
+                    'image': img_name,
+                    'parent_mosaic': parent_mosaic,
+                    **ellipse
+                })
+
+    print(f"CSV exporté : {filepath}")
+
+def export_mosaic_index(json_path, element, save_folder):
+    """
+    Reads the patched JSON and writes a lightweight companion JSON:
+        { "Mosaic_1_1.png": ["MoEDAL-034-035.png", ...], ... }
+    Allows instant lookup of which images belong to a given mosaic.
+    """
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    index = {}
+    for img_name, img_data in data['images'].items():
+        mosaic = img_data.get('parent_mosaic', 'no_mosaic')
+        index.setdefault(mosaic, []).append(img_name)
+
+    # Sort images within each mosaic, then sort mosaics alphabetically
+    index = {k: sorted(v) for k, v in sorted(index.items())}
+
+    filepath = os.path.join(save_folder, f"index_mosaics_{element}.json")
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(index, f, indent=4)
+
+    print(f"Index des mosaïques exporté : {filepath}")

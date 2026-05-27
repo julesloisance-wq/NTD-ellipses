@@ -8,7 +8,7 @@ import concurrent.futures
 
 from image_processing import get_grid_metadata
 from ellipse_detection import detect_reference_holes, analyze_ellipses
-from data_export import export_json, export_histogram, export_angle_histogram_from_bins, export_highlighted_image, export_valid_ellipses_histogram, export_global_heatmap
+from data_export import export_json, export_histogram, export_angle_histogram_from_bins, export_highlighted_image, export_valid_ellipses_histogram, export_global_heatmap, export_csv, export_mosaic_index
 from update_parent_mosaics import build_mosaic_mapping, patch_json
 
 import matplotlib.pyplot as plt
@@ -182,6 +182,12 @@ def main():
     json_path = os.path.join(save_folder, f"all_data_{element}.json")
     mapping = build_mosaic_mapping(target_dir)
     patch_json(json_path, mapping)
+
+    print("Generating CSV export...")
+    export_csv(json_path, element, save_folder)
+
+    print("Generating mosaic index...")
+    export_mosaic_index(json_path, element, save_folder)
 
     print("Generating global area histogram...")
     export_histogram(global_red_ellipses_data, config["element"], save_folder)
