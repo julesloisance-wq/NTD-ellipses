@@ -6,13 +6,17 @@ import math
 import matplotlib.pyplot as plt
 import json
 
-def export_json(data, element, save_folder):
+def export_json(data, element, save_folder, reference_system=None):
     """Exports a list of dictionaries to JSON format."""
     master_json = { 
         "element_name" : element,
         "images" : {}
         }
     
+    # Inject the profilometric coordinate system metadata at the root
+    if reference_system:
+        master_json["reference_system"] = reference_system
+        
     # Fill in the JSON with clear parent_mosaic structure
     for ellipse in data:
         img_name = ellipse["image_source"]
@@ -167,9 +171,7 @@ def export_global_heatmap(all_ellipses_data, element_name, save_folder):
     plt.ylabel("Global Y Position (µm)")
     plt.title(f"Global Density Heatmap of Craters - {element_name}")
     
-    # Note: plt.gca().invert_yaxis() was removed here because we already inverted 
-    # the local Y axis in ellipse_detection.py to match a standard Cartesian plane.
-    
+    plt.gca().invert_yaxis()
     plt.tight_layout()
     
     filename = f"Heatmap_Density_{element_name}.png"

@@ -212,7 +212,6 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
         # 7. Fit Ellipse
         ellipse = cv2.fitEllipse(cnt)
         (local_x, local_y), (minor_axis, major_axis), angle = ellipse
-        local_y = img_height - local_y  # Invert Y 
     
         # 8. Check internal intensity to categorize (using the green channel)
         mask = np.zeros_like(green_channel, dtype=np.uint8)

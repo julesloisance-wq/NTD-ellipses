@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import os
 import concurrent.futures
+import math
 
 from image_processing import get_grid_metadata
 from ellipse_detection import detect_reference_holes, analyze_ellipses
@@ -151,7 +152,60 @@ def main():
     img_height, img_width = ref_img.shape[:2]
     print(f"Raw image dimensions detected: {img_width}x{img_height} pixels")
 
-    # 3. PARALLEL DETECTION ON ALL RAW IMAGES
+    # 3. AUTOMATIC SECOND REFERENCE POINT (R2) DETECTION
+    print("\nAutomatically searching for the second reference hole (R2)...")
+    max_dist_sq = 0.0
+    r2_name = None
+    r2_x_cart = 0.0
+    r2_y_cart = 0.0
+
+    for name, hole in reference_holes.items():
+        if name == ref_image_name:
+            continue # Skip R1 (the origin)
+            
+        # 1. Extract indices of the current hole's image
+        match = re.search(r"MoEDAL-(\d{3})-(\d{3})\.png", name)
+        j_curr = int(match.group(1))
+        i_curr = int(match.group(2))
+        
+        # 2. Calculate raw global coordinates (Image coordinate system: Y pointing down)
+        gx_raw = (j_ref - j_curr) * img_width + hole["x"] - ref_x0
+        gy_raw = (i_ref - i_curr) * img_height + hole["y"] - ref_y0
+        
+        # 3. Convert to Standard Cartesian coordinate system (Y pointing up) for Profilometer trigonometry
+        x_cart = gx_raw
+        y_cart = -gy_raw
+        
+        # 4. Calculate squared distance to find the farthest hole
+        dist_sq = x_cart**2 + y_cart**2
+        
+        if dist_sq > max_dist_sq:
+            max_dist_sq = dist_sq
+            r2_name = name
+            r2_x_cart = x_cart
+            r2_y_cart = y_cart
+
+    if not r2_name:
+        raise ValueError("Error: Could not find a second reference hole (R2) on the foil.")
+
+    # 5. Calculate theoretical angle and physical distance
+    theta_code_rad = math.atan2(r2_y_cart, r2_x_cart)
+    pixel_resolution = config.get("pixel_resolution", 1.75)
+    dist_theoretical_um = math.sqrt(max_dist_sq) * pixel_resolution
+
+    print(f"-> R2 automatically selected: {r2_name}")
+    print(f"-> Theoretical foil angle (theta_code): {math.degrees(theta_code_rad):.3f}°")
+    print(f"-> Theoretical distance R1-R2: {dist_theoretical_um / 1000:.3f} mm")
+    
+    # 6. Structure metadata for JSON export
+    reference_system = {
+        "r1_image": ref_image_name,
+        "r2_image": r2_name,
+        "theta_code_radians": float(theta_code_rad),
+        "distance_R1_R2_um": float(dist_theoretical_um)
+    }   
+
+    # 4. PARALLEL DETECTION ON ALL RAW IMAGES
     image_files = glob.glob(os.path.join(target_dir, "MoEDAL-*.png"))
     global_red_ellipses_data = []
     image_ellipse_counts = {}
@@ -174,9 +228,9 @@ def main():
             except Exception as exc:
                 print(f"An error occurred during analysis: {exc}")
 
-    # 4. GLOBAL EXPORTS
+    # 5. GLOBAL EXPORTS
     print("Generating global JSON export for all red ellipses...")
-    export_json(global_red_ellipses_data, element, save_folder)
+    export_json(global_red_ellipses_data, element, save_folder, reference_system)
 
     print("Filling parent_mosaic fields...")
     json_path = os.path.join(save_folder, f"all_data_{element}.json")
