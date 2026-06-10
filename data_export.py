@@ -38,6 +38,14 @@ def export_json(data, element, save_folder, reference_system=None):
     # Sort the dictionary keys to ensure the X-axis is logically ordered
     master_json["images"] = dict(sorted(master_json["images"].items(), key=lambda item: extract_coords(item[0])))
 
+    # Assign stable, deterministic IDs after sorting
+    # IDs are consistent across runs because they follow the sorted image order
+    crater_id = 1
+    for img_data in master_json["images"].values():
+        for ellipse in img_data["ellipses"]:
+            ellipse["id"] = crater_id
+            crater_id += 1
+
     filepath = os.path.join(save_folder, f"all_data_{element}.json")
     with open(filepath, 'w') as f:
         json.dump(master_json, f, indent=4)
@@ -188,7 +196,7 @@ def export_csv(json_path, element, save_folder):
         data = json.load(f)
 
     fieldnames = [
-        'image', 'parent_mosaic',
+        'id', 'image', 'parent_mosaic',
         'local_x', 'local_y', 'x_um', 'y_um',
         'minor_axis_um', 'major_axis_um', 'area_um2',
         'angle', 'mean_intensity', 'circularity', 'category'

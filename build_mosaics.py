@@ -1,7 +1,7 @@
 import os
 import glob
 import re
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import argparse
 from tqdm import tqdm
 import cv2
@@ -11,7 +11,8 @@ import json
 def main():
     parser = argparse.ArgumentParser(description="Build 3x3 Mosaics from MoEDAL grid images")
     parser.add_argument("--dir", default="/Users/julesloisance/Desktop/StageHelsinki/MoEDAL_Data_Apr2025/O1_L8_ME18_UD", help="Target directory containing the images")
-    parser.add_argument("--draw-craters", action="store_true", help="Draw red circles around interesting craters on the mosaics")
+    parser.add_argument("--draw-craters", action="store_true", help="Draw red circles around craters (independent re-detection, no IDs)")
+    parser.add_argument("--annotate-json", action="store_true", help="Overlay crater IDs from the JSON analysis results on the mosaics")
     args = parser.parse_args()
     
     target_dir = args.dir
@@ -20,12 +21,26 @@ def main():
     
     config = {}
     config_path = "config.json"
-    if args.draw_craters:
+    if args.draw_craters or args.annotate_json:
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 config = json.load(f)
         else:
             print(f"⚠️ Warning: {config_path} not found. Using default crater parameters.")
+
+    # Load JSON analysis data if --annotate-json is requested
+    json_data = None
+    if args.annotate_json:
+        element     = config.get("element", "")
+        save_folder_json = config.get("save_folder", "")
+        json_path = os.path.join(save_folder_json, element, f"all_data_{element}.json")
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                json_data = json.load(f)
+            print(f"✅ JSON data loaded: {json_path}")
+        else:
+            print(f"⚠️ Warning: JSON not found at {json_path}. Run main.py first.")
+            args.annotate_json = False
     
     print(f"Target directory: {target_dir}")
     print(f"Output folder: {save_folder}")
@@ -115,11 +130,18 @@ def main():
                                     img = Image.open(path)
                             else:
                                 img = Image.open(path)
-                                
+
                             # Resize to min_height while maintaining aspect ratio
-                            new_width = int(img.size[0] * min_height / img.size[1])
+                            scale = min_height / img.size[1]
+                            new_width = int(img.size[0] * scale)
                             resized_img = img.resize((new_width, min_height), Image.LANCZOS)
-                            
+
+                            # Annotate with crater IDs from JSON (after resize, before crop)
+                            img_name = f"MoEDAL-{curr_i:03}-{curr_j:03}.png"
+                            if args.annotate_json and json_data:
+                                pixel_res = config.get("pixel_resolution", 1.75)
+                                resized_img = annotate_from_json(resized_img, img_name, json_data, scale, pixel_res)
+
                             # Systematic cropping
                             # PIL crop tuple: (left, upper, right, lower)
                             cropped_img = resized_img.crop((crop_width_X, 0, resized_img.size[0], min_height - crop_height_Y))
@@ -183,6 +205,64 @@ def main():
                 pbar.update(1)
                 
     print(f"\n✅ All {total_blocks} mosaics have been successfully built and saved in {save_folder}")
+
+def annotate_from_json(img_pil, img_name, json_data, scale, pixel_res):
+    """
+    Draws crater circles and IDs onto a (already resized) PIL image.
+    Coordinates come from local_x/local_y in the JSON (raw image pixels),
+    scaled by the same factor used to resize the image to min_height.
+    """
+    image_entry = json_data.get("images", {}).get(img_name)
+    if not image_entry:
+        return img_pil
+
+    ellipses = image_entry.get("ellipses", [])
+    if not ellipses:
+        return img_pil
+
+    draw = ImageDraw.Draw(img_pil)
+
+    # Load a readable font; fall back to PIL default if no TTF is available
+    font_size = max(24, int(36 * scale))
+    font = None
+    for font_path in [
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+    ]:
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+            break
+        except (IOError, OSError):
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    for ellipse in ellipses:
+        crater_id = ellipse.get("id", "?")
+        lx = int(ellipse["local_x"] * scale)
+        ly = int(ellipse["local_y"] * scale)
+
+        # Radius: convert major axis from µm back to original pixels, then scale
+        radius = max(15, int(ellipse["major_axis_um"] / pixel_res * scale * 3))
+        line_width = max(2, int(4 * scale))
+
+        # Red circle
+        draw.ellipse(
+            [(lx - radius, ly - radius), (lx + radius, ly + radius)],
+            outline=(255, 0, 0),
+            width=line_width
+        )
+        # ID label just to the right of the circle
+        draw.text(
+            (lx + radius + 6, ly - font_size // 2),
+            str(crater_id),
+            fill=(255, 50, 50),
+            font=font
+        )
+
+    return img_pil
+
 
 def draw_interesting_craters(img_path, config):
     img_color = cv2.imread(img_path, cv2.IMREAD_COLOR)
