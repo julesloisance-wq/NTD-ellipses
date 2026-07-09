@@ -37,7 +37,9 @@ def main():
     x_m2 = float(input("Enter motor X for R2 (mm): "))
     y_m2 = float(input("Enter motor Y for R2 (mm): "))
 
-    # Rotation angle of the physical foil relative to the scan coordinate frame
+    # Both angles are in Cartesian y-UP convention (profilometer y axis points UP).
+    # theta_code is stored in y-UP by main.py; theta_machine is also y-UP since motor y points UP.
+    # delta_theta > 0 means the foil is rotated counter-clockwise relative to the motor frame.
     theta_machine = math.atan2(y_m2 - y_m1, x_m2 - x_m1)
     delta_theta = theta_machine - theta_code
 
@@ -62,11 +64,21 @@ def main():
     x_code = cible["x_um"] / 1000.0
     y_code = cible["y_um"] / 1000.0
 
-    # Rigid-body transformation applying the foil rotation:
-    # X_target = Xm1 + Xcode*cos(dTheta) + Ycode*sin(dTheta)
-    # Y_target = Ym1 + Xcode*sin(dTheta) - Ycode*cos(dTheta)
+    # Rigid-body transformation (scan frame y-DOWN → motor frame y-UP).
+    # Scan coordinates (x_code, y_code) use image convention: y points DOWN.
+    # Motor frame uses Cartesian convention: y points UP.
+    # Step 1 – flip scan y to Cartesian: y_code_cart = -y_code
+    # Step 2 – rotate by delta_theta (Cartesian, CCW positive):
+    #   x_motor = x_code * cos(dθ) - y_code_cart * sin(dθ)
+    #           = x_code * cos(dθ) + y_code * sin(dθ)
+    #   y_motor = x_code * sin(dθ) + y_code_cart * cos(dθ)
+    #           = x_code * sin(dθ) - y_code * cos(dθ)
     x_cible = x_m1 + x_code * math.cos(delta_theta) + y_code * math.sin(delta_theta)
     y_cible = y_m1 + x_code * math.sin(delta_theta) - y_code * math.cos(delta_theta)
+    # --- y-DOWN motor alternative (uncomment if profilometer y points DOWN) ---
+    # x_cible = x_m1 + x_code * math.cos(delta_theta) - y_code * math.sin(delta_theta)
+    # y_cible = y_m1 + x_code * math.sin(delta_theta) + y_code * math.cos(delta_theta)
+    # NOTE: if motor y-DOWN, also negate theta_code above: theta_code = -theta_code
 
     print("\n=== TARGETING RESULT ===")
     print(f"Selected crater: {target_img_name}  (area: {cible['area_um2']:.1f} µm²)")

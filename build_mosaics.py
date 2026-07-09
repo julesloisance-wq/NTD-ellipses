@@ -8,6 +8,16 @@ import cv2
 import numpy as np
 import json
 
+def load_processed_image(path):
+    img_color = cv2.imread(path, cv2.IMREAD_COLOR)
+    if img_color is None:
+        return None
+    green_channel = img_color[:, :, 1]
+    blurred = cv2.GaussianBlur(green_channel, (5, 5), 0)
+    # Convert blurred gray to RGB so PIL can handle it and we can draw red on it
+    rgb = cv2.cvtColor(blurred, cv2.COLOR_GRAY2RGB)
+    return Image.fromarray(rgb)
+
 def main():
     parser = argparse.ArgumentParser(description="Build 3x3 Mosaics from MoEDAL grid images")
     parser.add_argument("--dir", default="/Users/julesloisance/Desktop/StageHelsinki/MoEDAL_Data_Apr2025/O1_L8_ME18_UD", help="Target directory containing the images")
@@ -79,8 +89,8 @@ def main():
     print(f"Total 3x3 Mosaics to build: {num_row_blocks * num_col_blocks}")
     
     # Crop constants from empirical validation (Code.ipynb)
-    crop_width_X = 655   # will be cropped from the left
-    crop_height_Y = 295  # will be cropped from the bottom
+    crop_width_X = 664   # will be cropped from the left
+    crop_height_Y = 311  # will be cropped from the bottom
     step = 3
     
     # Find the minimum height across the usable dataset to resize images identically
@@ -127,9 +137,9 @@ def main():
                             if args.draw_craters:
                                 img = draw_interesting_craters(path, config)
                                 if img is None:
-                                    img = Image.open(path)
+                                    img = load_processed_image(path)
                             else:
-                                img = Image.open(path)
+                                img = load_processed_image(path)
 
                             # Resize to min_height while maintaining aspect ratio
                             scale = min_height / img.size[1]
@@ -245,14 +255,17 @@ def annotate_from_json(img_pil, img_name, json_data, scale, pixel_res):
 
         # Radius: convert major axis from µm back to original pixels, then scale
         radius = max(15, int(ellipse["major_axis_um"] / pixel_res * scale * 3))
-        line_width = max(2, int(4 * scale))
+        line_width = max(3, int(6 * scale))  # Thicker line
 
-        # Red circle
+        # Thick Red circle
         draw.ellipse(
             [(lx - radius, ly - radius), (lx + radius, ly + radius)],
             outline=(255, 0, 0),
             width=line_width
         )
+        # Center cross for precision
+        draw.line([(lx - 10, ly), (lx + 10, ly)], fill=(255, 0, 0), width=line_width - 1)
+        draw.line([(lx, ly - 10), (lx, ly + 10)], fill=(255, 0, 0), width=line_width - 1)
         # ID label just to the right of the circle
         draw.text(
             (lx + radius + 6, ly - font_size // 2),
@@ -271,6 +284,9 @@ def draw_interesting_craters(img_path, config):
         
     green_channel = img_color[:, :, 1]
     blurred = cv2.GaussianBlur(green_channel, (5, 5), 0)
+    
+    # Use blurred green channel as background
+    display_bgr = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
     
     lower = int(max(0, np.median(blurred) * 0.66))
     upper = int(max(0, np.median(blurred) * 1.33))
@@ -306,10 +322,10 @@ def draw_interesting_craters(img_path, config):
         
         if min_intensity <= mean_intensity <= max_intensity:
             # Draw enlarged ellipse in RED (BGR: 0, 0, 255) with a very thick line
-            cv2.ellipse(img_color, enlarged_ellipse, (0, 0, 255), 10)
+            cv2.ellipse(display_bgr, enlarged_ellipse, (0, 0, 255), 10)
             
     # Convert back to PIL Image (OpenCV uses BGR, PIL uses RGB)
-    img_rgb = cv2.cvtColor(img_color, cv2.COLOR_BGR2RGB)
+    img_rgb = cv2.cvtColor(display_bgr, cv2.COLOR_BGR2RGB)
     return Image.fromarray(img_rgb)
 
 if __name__ == "__main__":

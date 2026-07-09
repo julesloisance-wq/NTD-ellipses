@@ -79,7 +79,14 @@ def export_highlighted_image(image_path, ellipses_data, base_name, save_folder):
 
     # Load the raw image
     img_color = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if img_color is None:
+        return
     img_height = img_color.shape[0]
+    
+    # Use blurred green channel as background
+    green = img_color[:, :, 1]
+    blurred = cv2.GaussianBlur(green, (5, 5), 0)
+    img_color = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
     
     # We need the config to know the pixel resolution for unit conversion
     try:
@@ -106,7 +113,9 @@ def export_highlighted_image(image_path, ellipses_data, base_name, save_folder):
         # Red circle on top if intensity confirms it's a deep crater
         if e["category"] == "red":
             radius_red = int((major_px + minor_px) * 5)
-            cv2.circle(img_color, center, radius_red, (0, 0, 255), 2)
+            cv2.circle(img_color, center, radius_red, (0, 0, 255), 4)
+            cv2.line(img_color, (center[0]-15, center[1]), (center[0]+15, center[1]), (0,0,255), 3)
+            cv2.line(img_color, (center[0], center[1]-15), (center[0], center[1]+15), (0,0,255), 3)
 
     filename = f"{base_name}_highlighted.png"
     cv2.imwrite(os.path.join(save_folder, filename), img_color)

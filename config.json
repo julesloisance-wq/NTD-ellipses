@@ -5,10 +5,12 @@
   "num_columns": 3,
   "num_rows": 4,
   "step": 3,
-  "crop_width_X": 655,
-  "crop_height_Y": 295,
+  "crop_width_X": 664,
+  "crop_height_Y": 311,
   "min_intensity": 0,
-  "max_intensity": 130,
+  "max_intensity": 200,
+  "min_area": 20,
+  "max_area": 2000,
   "pixel_resolution": 1.75,
   "angle_tolerance": 5
 }

@@ -158,8 +158,8 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
     if not match:
         raise ValueError(f"Filename {filename} does not match expected pattern.")
     
-    j_current = int(match.group(1))
-    i_current = int(match.group(2))
+    i_current = int(match.group(1))
+    j_current = int(match.group(2))
 
     # 2. Load image and extract the Green Channel
     # OpenCV loads images in BGR format. Index 1 is Green.
@@ -170,8 +170,8 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
     blurred = cv2.GaussianBlur(green_channel, (5, 5), 0)
 
     # 4. Canny Edge Detection
-    # Detects sharp changes in intensity (edges) instead of global thresholds
-    # Thresholds are calculated based on the median of the pixel intensities to adapt to varying lighting conditions
+    # Thresholds are calculated based on the median of the pixel intensities
+    # to adapt to varying lighting conditions across images.
     lower = int(max(0, np.median(blurred) * 0.66))
     upper = int(max(0, np.median(blurred) * 1.33))
     edges = cv2.Canny(blurred, threshold1=lower, threshold2=upper)
@@ -205,19 +205,47 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
             continue
         
         circularity = 4 * np.pi * (area / (perimeter * perimeter))
-        # Reject long traces/scratches (e.g., circularity < 0.4)
-        if circularity < 0.4:
+        # Reject long traces/scratches. Lowered to 0.25 to accept slightly
+        # asymmetric holes (teardrop shapes) while still rejecting scratches.
+        if circularity < 0.25:
             continue
 
         # 7. Fit Ellipse
         ellipse = cv2.fitEllipse(cnt)
         (local_x, local_y), (minor_axis, major_axis), angle = ellipse
     
-        # 8. Check internal intensity to categorize (using the green channel)
+        # 8. Check internal intensity AND dark-ring / bright-center morphology
+        # We expect: dark annular border (the etched track wall) + brighter interior
+        (ex, ey), (eMA, ema), eangle = ellipse
+        ex_i, ey_i = int(ex), int(ey)
+        r_inner = max(1, int(min(eMA, ema) / 2 * 0.6))   # 60% of minor semi-axis
+        r_outer = max(2, int(min(eMA, ema) / 2 * 1.4))   # 140% of minor semi-axis
+
+        # Build interior and annular ring masks using simple distance from center
+        h_img, w_img = green_channel.shape
+        ys_grid, xs_grid = np.ogrid[:h_img, :w_img]
+        dist2 = (xs_grid - ex_i) ** 2 + (ys_grid - ey_i) ** 2
+        interior_mask = dist2 < r_inner ** 2
+        ring_mask     = (dist2 >= r_inner ** 2) & (dist2 < r_outer ** 2)
+
+        interior_pixels = green_channel[interior_mask]
+        ring_pixels     = green_channel[ring_mask]
+
+        mean_interior = float(np.mean(interior_pixels)) if interior_pixels.size > 0 else 0.0
+        mean_ring     = float(np.mean(ring_pixels))     if ring_pixels.size     > 0 else 0.0
+
+        # Full-ellipse mean for the original intensity gate
         mask = np.zeros_like(green_channel, dtype=np.uint8)
         cv2.ellipse(mask, ellipse, (255,), thickness=-1)
         masked_pixels = green_channel[mask == 255]
         mean_intensity = np.mean(masked_pixels) if masked_pixels.size > 0 else 0
+
+        # MORPHOLOGICAL FILTER — disabled (too aggressive, rejects valid craters)
+        # Rejects contours where the interior is darker than the surrounding ring.
+        # Uncomment to re-enable the "noir dehors, blanc dedans" signature check.
+        # if mean_interior < mean_ring - 5:
+        #     continue
+
 
         # Categorize
         if config["min_intensity"] <= mean_intensity <= config["max_intensity"]:
@@ -226,14 +254,17 @@ def analyze_ellipses(image_path, config, ref_x0, ref_y0, i_ref, j_ref, img_width
             bin_index = int(angle // 5) % num_bins
             ellipse_histogram[bin_index] += 1
         else:
-            continue # Too bright, ignore
+            continue # Intensity gate
 
         # 9. Spatial Geometry: Convert local pixels to Global Micrometers
         # We calculate how many pixels away this image is from the reference image
         # Assuming i = columns (X-axis) and j = rows (Y-axis) based on standard grid 
         # with bottom right as (j=0,i=0) and top left as (x_global=0,y_global=0)
-        global_x_pixels = (j_ref - j_current) * img_width + local_x - ref_x0
-        global_y_pixels = (i_ref - i_current) * img_height + local_y - ref_y0
+        step_x = img_width - config.get("crop_width_X", 655)
+        step_y = img_height - config.get("crop_height_Y", 295)
+
+        global_x_pixels = (j_ref - j_current) * step_x + local_x - ref_x0
+        global_y_pixels = (i_ref - i_current) * step_y + local_y - ref_y0
 
         # Convert to micrometers
         global_x_um = global_x_pixels * pixel_resolution

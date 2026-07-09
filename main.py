@@ -142,8 +142,8 @@ def main():
     # Extract i and j indices from the reference image name
     match_ref = re.search(r"MoEDAL-(\d{3})-(\d{3})\.png", ref_image_name)
     if match_ref:
-        j_ref = int(match_ref.group(1))
-        i_ref = int(match_ref.group(2))
+        i_ref = int(match_ref.group(1))
+        j_ref = int(match_ref.group(2))
     else:
         raise ValueError("Reference image name does not match expected pattern 'MoEDAL-xxx-yyy.png'.")
 
@@ -165,12 +165,15 @@ def main():
             
         # 1. Extract indices of the current hole's image
         match = re.search(r"MoEDAL-(\d{3})-(\d{3})\.png", name)
-        j_curr = int(match.group(1))
-        i_curr = int(match.group(2))
+        i_curr = int(match.group(1))
+        j_curr = int(match.group(2))
         
         # 2. Calculate raw global coordinates (Image coordinate system: Y pointing down)
-        gx_raw = (j_ref - j_curr) * img_width + hole["x"] - ref_x0
-        gy_raw = (i_ref - i_curr) * img_height + hole["y"] - ref_y0
+        step_x = img_width - config.get("crop_width_X", 655)
+        step_y = img_height - config.get("crop_height_Y", 295)
+        
+        gx_raw = (j_ref - j_curr) * step_x + hole["x"] - ref_x0
+        gy_raw = (i_ref - i_curr) * step_y + hole["y"] - ref_y0
         
         # 3. Convert to Standard Cartesian coordinate system (Y pointing up) for Profilometer trigonometry
         x_cart = gx_raw

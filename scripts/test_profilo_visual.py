@@ -113,6 +113,10 @@ if scan_bgr_full is None:
     print(f"[ERROR] Could not read: {img_path}")
     sys.exit(1)
 
+green_channel = scan_bgr_full[:, :, 1]
+blurred = cv2.GaussianBlur(green_channel, (5, 5), 0)
+scan_bgr_full = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
+
 scan_bgr = cv2.resize(scan_bgr_full, (0, 0), fx=SCALE, fy=SCALE,
                        interpolation=cv2.INTER_AREA)
 scan_rgb = cv2.cvtColor(scan_bgr, cv2.COLOR_BGR2RGB)
@@ -166,21 +170,24 @@ def draw_cross(img, pt, color, size=18, thickness=1):
 scan_cv = scan_bgr.copy()
 
 for (cv_x, cv_y, cid, area) in crater_pixels:
-    r_px = max(8, int(math.sqrt(area / math.pi) / PIXEL_RES))
-    cv2.circle(scan_cv, (cv_x, cv_y), r_px, (0, 0, 220), 1, cv2.LINE_AA)
-    draw_cross(scan_cv, (cv_x, cv_y), (80, 80, 255), size=6, thickness=1)
-    cv2.putText(scan_cv, str(cid), (cv_x + r_px + 3, cv_y - 3),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.42, (80, 80, 255), 1, cv2.LINE_AA)
+    r_px = max(12, int(math.sqrt(area / math.pi) / PIXEL_RES) * 2)
+    cv2.circle(scan_cv, (cv_x, cv_y), r_px, (0, 0, 255), 3, cv2.LINE_AA)
+    draw_cross(scan_cv, (cv_x, cv_y), (0, 0, 255), size=10, thickness=2)
+    cv2.putText(scan_cv, str(cid), (cv_x + r_px + 5, cv_y - 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2, cv2.LINE_AA)
 
-draw_cross(scan_cv, R1_CV, (0, 215, 255), size=22, thickness=1)
-cv2.putText(scan_cv, "R1", (R1_CV[0] + 8, R1_CV[1] - 6),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 1, cv2.LINE_AA)
+# R1 and R2: solid black circles (simulate alignment artefacts) + thin white outline
+cv2.circle(scan_cv, R1_CV, 9,  (0, 0, 0),       -1, cv2.LINE_AA)   # filled black
+cv2.circle(scan_cv, R1_CV, 9,  (220, 220, 220),   1, cv2.LINE_AA)   # white outline
+cv2.putText(scan_cv, "R1", (R1_CV[0] + 12, R1_CV[1] - 6),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1, cv2.LINE_AA)
 
-draw_cross(scan_cv, R2_CV, (0, 165, 255), size=22, thickness=1)
-cv2.putText(scan_cv, "R2", (R2_CV[0] + 8, R2_CV[1] - 6),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 1, cv2.LINE_AA)
+cv2.circle(scan_cv, R2_CV, 9,  (0, 0, 0),       -1, cv2.LINE_AA)
+cv2.circle(scan_cv, R2_CV, 9,  (220, 220, 220),   1, cv2.LINE_AA)
+cv2.putText(scan_cv, "R2", (R2_CV[0] + 12, R2_CV[1] - 6),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1, cv2.LINE_AA)
 
-cv2.line(scan_cv, R1_CV, R2_CV, (0, 200, 255), 1, cv2.LINE_AA)
+cv2.line(scan_cv, R1_CV, R2_CV, (180, 180, 180), 1, cv2.LINE_AA)
 
 scan_annotated = cv2.cvtColor(scan_cv, cv2.COLOR_BGR2RGB)
 
@@ -199,9 +206,9 @@ ax1.set_title(
 )
 ax1.axis("off")
 ax1.legend(handles=[
-    Line2D([0],[0], color="cyan",         linewidth=1, label="R1 crosshair"),
-    Line2D([0],[0], color="deepskyblue",  linewidth=1, label="R2 crosshair"),
-    Line2D([0],[0], color=(0.3, 0.3, 1.0),linewidth=1, marker="o", markersize=6,
+    Line2D([0],[0], marker="o", color="w", markerfacecolor="black",
+           markersize=9, markeredgecolor="silver", label="R1 / R2 (virtual artefacts)"),
+    Line2D([0],[0], color=(0.3, 0.3, 1.0), linewidth=1, marker="o", markersize=6,
            markerfacecolor="none", label="Detected craters"),
 ], loc="lower right", fontsize=9)
 plt.tight_layout()
@@ -287,22 +294,26 @@ canvas_ann = canvas_bgr.copy()
 
 for (cv_x, cv_y, cid, area) in crater_pixels:
     c_px, c_py = scan_to_canvas(cv_x, cv_y)
-    r_px = max(8, int(math.sqrt(area / math.pi) / PIXEL_RES))
+    r_px = max(12, int(math.sqrt(area / math.pi) / PIXEL_RES) * 2)
     is_tgt = (cid == tgt_id)
-    col = (0, 0, 220) if is_tgt else (60, 30, 30)
-    cv2.circle(canvas_ann, (c_px, c_py), r_px, col, 1, cv2.LINE_AA)
-    draw_cross(canvas_ann, (c_px, c_py), col, size=6, thickness=1)
+    col = (0, 0, 255) if is_tgt else (100, 100, 150)
+    thick = 3 if is_tgt else 2
+    cv2.circle(canvas_ann, (c_px, c_py), r_px, col, thick, cv2.LINE_AA)
+    draw_cross(canvas_ann, (c_px, c_py), col, size=10, thickness=thick)
     if is_tgt:
         cv2.putText(canvas_ann, f"TARGET {cid}", (c_px + r_px + 5, c_py - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 80, 255), 1, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
 
-draw_cross(canvas_ann, r1_canvas_gt, (0, 215, 255), size=22, thickness=1)
-cv2.putText(canvas_ann, "R1", (r1_canvas_gt[0] + 10, r1_canvas_gt[1] - 8),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 1, cv2.LINE_AA)
+# R1 and R2 on canvas: same solid black circles
+cv2.circle(canvas_ann, r1_canvas_gt, 9, (0, 0, 0),       -1, cv2.LINE_AA)
+cv2.circle(canvas_ann, r1_canvas_gt, 9, (220, 220, 220),   1, cv2.LINE_AA)
+cv2.putText(canvas_ann, "R1", (r1_canvas_gt[0] + 12, r1_canvas_gt[1] - 6),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1, cv2.LINE_AA)
 
-draw_cross(canvas_ann, r2_canvas_gt, (0, 165, 255), size=22, thickness=1)
-cv2.putText(canvas_ann, "R2", (r2_canvas_gt[0] + 10, r2_canvas_gt[1] - 8),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 1, cv2.LINE_AA)
+cv2.circle(canvas_ann, r2_canvas_gt, 9, (0, 0, 0),       -1, cv2.LINE_AA)
+cv2.circle(canvas_ann, r2_canvas_gt, 9, (220, 220, 220),   1, cv2.LINE_AA)
+cv2.putText(canvas_ann, "R2", (r2_canvas_gt[0] + 12, r2_canvas_gt[1] - 6),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1, cv2.LINE_AA)
 
 canvas_rgb = cv2.cvtColor(canvas_ann, cv2.COLOR_BGR2RGB)
 
