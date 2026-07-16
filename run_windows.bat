@@ -2,13 +2,19 @@
 echo Starting the Ellipse Detection pipeline...
 
 :: Check if virtual environment exists, create if not
-IF NOT EXIST venv (
-    echo Creating virtual environment...
-    python -m venv venv
+IF NOT EXIST .venv (
+    IF NOT EXIST venv (
+        echo Creating virtual environment...
+        python -m venv .venv
+    )
 )
 
 :: Activate the virtual environment
-call venv\Scripts\activate
+IF EXIST .venv (
+    call .venv\Scripts\activate
+) ELSE (
+    call venv\Scripts\activate
+)
 
 :: Install required libraries (quietly to avoid spamming the console)
 echo Installing dependencies...

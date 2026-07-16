@@ -11,11 +11,27 @@ def detect_reference_holes(target_dir, config):
     Caches the results in reference_holes.json to avoid rescanning.
     Returns a dictionary of found holes: { 'filename': {'x': cx, 'y': cy, 'radius': r} }
     """
+    crop_width_X = config.get("crop_width_X", 667)
+    crop_height_Y = config.get("crop_height_Y", 323.5)
+    h_default = 2748
+    
     cache_path = os.path.join(target_dir, "reference_holes.json")
     if os.path.exists(cache_path):
         print(f"Loading reference holes from cache: {cache_path}")
         with open(cache_path, 'r') as f:
-            return json.load(f)
+            cached_data = json.load(f)
+            
+        filtered_holes = {}
+        for img_name, hole in cached_data.items():
+            cx, cy = hole["x"], hole["y"]
+            # Filter out out-of-bounds or cropped zone duplicates
+            if cx < 0 or cy < 0 or cx >= 3840 or cy >= h_default:
+                continue
+            if cx < crop_width_X or cy > h_default - crop_height_Y:
+                print(f"  -> Filtered out duplicate reference hole in crop zone of {img_name} at ({cx}, {cy})")
+                continue
+            filtered_holes[img_name] = hole
+        return filtered_holes
 
     print("Scanning images for reference holes (this may take a minute)...")
     reference_holes = {}
@@ -138,6 +154,9 @@ def detect_reference_holes(target_dir, config):
         
         if best_circle is not None:
             cx, cy, r = best_circle
+            if cx < crop_width_X or cy > h - crop_height_Y:
+                print(f"  -> Discarded duplicate reference hole in crop zone of {img_name} at ({cx}, {cy})")
+                continue
             reference_holes[img_name] = {"x": int(cx), "y": int(cy), "radius": int(r)}
             print(f"  -> Valid reference hole found in {img_name} at ({cx}, {cy}) r={r} [Interior={best_mean:.1f}, Spread={best_score}°]")
 

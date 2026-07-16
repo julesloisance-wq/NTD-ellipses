@@ -89,8 +89,8 @@ def main():
     print(f"Total 3x3 Mosaics to build: {num_row_blocks * num_col_blocks}")
     
     # Crop constants from empirical validation (Code.ipynb)
-    crop_width_X = 664   # will be cropped from the left
-    crop_height_Y = 311  # will be cropped from the bottom
+    crop_width_X = 667   # will be cropped from the left
+    crop_height_Y = 323.5  # will be cropped from the bottom
     step = 3
     
     # Find the minimum height across the usable dataset to resize images identically
@@ -154,7 +154,7 @@ def main():
 
                             # Systematic cropping
                             # PIL crop tuple: (left, upper, right, lower)
-                            cropped_img = resized_img.crop((crop_width_X, 0, resized_img.size[0], min_height - crop_height_Y))
+                            cropped_img = resized_img.crop((int(round(crop_width_X)), 0, resized_img.size[0], int(round(min_height - crop_height_Y))))
                             row_imgs.append(cropped_img)
                             img.close()
                         else:
