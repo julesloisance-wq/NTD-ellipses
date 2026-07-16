@@ -17,7 +17,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 def load_config():
-    config_path = os.path.join(os.path.dirname(__file__), "..", "config.json")
+    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config.json"))
     with open(config_path, "r") as f:
         return json.load(f)
 
@@ -49,7 +49,7 @@ def main():
     element = config.get("element", "O1_L8_ME18_UD")
     images_dir = os.path.join(data_dir, element)
     
-    output_dir = os.path.join(os.path.dirname(__file__), "..", "report_figures")
+    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "report_figures"))
     os.makedirs(output_dir, exist_ok=True)
     
     # 1. Clean obsolete files

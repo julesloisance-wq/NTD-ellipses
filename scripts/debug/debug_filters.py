@@ -14,7 +14,7 @@ Run from the project root:
     .venv/bin/python scripts/debug_filters.py
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import cv2
 import numpy as np
@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 with open(os.path.join(PROJECT_ROOT, "config.json")) as f:
     config = json.load(f)
 

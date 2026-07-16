@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import os
 
-OUT_DIR = "report_figures"
+OUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "report_figures"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 rng = np.random.default_rng(42)

@@ -10,7 +10,7 @@ import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 import os
 
-OUT_DIR = "report_figures"
+OUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "report_figures"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ── Palette ───────────────────────────────────────────────────────────────────

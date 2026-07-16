@@ -37,7 +37,7 @@ TARGET_IMAGE = "MoEDAL-057-035.png"
 IMAGE_DIR = "/Users/julesloisance/Desktop/StageHelsinki/MoEDAL_Data_Apr2025/O1_L8_ME18_UD"
 
 # Config file path (pixel resolution and overlap parameters)
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.json")
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config.json"))
 
 # ===========================================================================
 

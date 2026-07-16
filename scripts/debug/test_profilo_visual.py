@@ -41,7 +41,7 @@ Run from the project root:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import cv2
 import math
@@ -63,7 +63,7 @@ CANVAS_BG       = 50      # background grey level (0–255)
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. LOAD CONFIG AND JSON DATA
 # ══════════════════════════════════════════════════════════════════════════════
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 config_path  = os.path.join(PROJECT_ROOT, "config.json")
 
 with open(config_path, "r") as f:

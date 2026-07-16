@@ -5,11 +5,9 @@ import json
 from PIL import Image
 
 def main():
-    # 1. Load config.json
     config_path = "config.json"
     if not os.path.exists(config_path):
-        # If run from scripts/ directory
-        config_path = os.path.join("..", "config.json")
+        config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config.json"))
     
     if os.path.exists(config_path):
         with open(config_path, "r") as f:
@@ -99,13 +97,8 @@ def main():
             print(f"Error processing {filename}: {e}")
 
     # 5. Save the result in report_figures
-    # Ensure report_figures directory exists
-    output_dir = "report_figures"
-    if not os.path.exists(output_dir):
-        output_dir = os.path.join("..", "report_figures")
-        if not os.path.exists(output_dir):
-            output_dir = "report_figures"
-            os.makedirs(output_dir, exist_ok=True)
+    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "report_figures"))
+    os.makedirs(output_dir, exist_ok=True)
 
     output_path = os.path.join(output_dir, "full_foil_mosaic.png")
     print(f"Saving stitched image to {output_path}...")

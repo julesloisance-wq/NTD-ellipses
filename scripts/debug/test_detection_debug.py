@@ -17,7 +17,7 @@ Run from the project root:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import cv2
 import numpy as np
@@ -26,11 +26,12 @@ import glob
 import re
 
 # ── Load config ────────────────────────────────────────────────────────────────
-with open("config.json", "r") as f:
+config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config.json"))
+with open(config_path, "r") as f:
     config = json.load(f)
 
 TARGET_DIR   = os.path.join(config["folder_path"], config["element"])
-OUTPUT_DIR   = "scripts/debug_output"
+OUTPUT_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "debug_output"))
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 MIN_AREA              = config.get("min_area",       20)
