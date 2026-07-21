@@ -4,7 +4,99 @@ This software suite automates the detection, qualification, and spatial alignmen
 
 ---
 
-## ⚙️ Quickstart Setup
+## 🚀 Getting Started (from scratch)
+
+Follow these steps exactly if you are setting up this project for the first time on a new machine.
+
+### Step 1 — Install the prerequisites
+
+You need two things installed on your machine before anything else:
+
+- **Python 3.8+** → Download from [python.org](https://www.python.org/downloads/)
+  - On Windows: during installation, **check the box "Add Python to PATH"**
+  - Verify it works: open a terminal and type `python --version` (Windows) or `python3 --version` (macOS/Linux)
+- **Git** → Download from [git-scm.com](https://git-scm.com/downloads)
+  - Verify it works: open a terminal and type `git --version`
+
+> VS Code is recommended as your code editor. Install it from [code.visualstudio.com](https://code.visualstudio.com/).
+
+---
+
+### Step 2 — Clone the repository
+
+Open a terminal (Command Prompt / PowerShell on Windows, Terminal on macOS/Linux) and run:
+
+```bash
+git clone https://github.com/julesloisance-wq/NTD-ellipses
+```
+
+Then navigate into the project folder:
+
+```bash
+cd NTD-ellipses
+```
+
+You now have the full project on your machine.
+
+---
+
+### Step 3 — Set up `config.json`
+
+Open `config.json` at the root of the project and fill in the following fields for your specific dataset:
+
+```json
+{
+  "folder_path": "/absolute/path/to/your/raw/images/root",
+  "element":     "subfolder_name_of_the_sheet_to_process",
+  "save_folder": "/absolute/path/where/results/will/be/saved",
+  ...
+}
+```
+
+- `folder_path`: the root directory that contains your raw scanner images
+- `element`: the name of the subfolder corresponding to the foil sheet you want to process
+- `save_folder`: where all outputs (CSV, plots, logs) will be written — the folder will be created if it does not exist
+
+> Leave the other parameters (`crop_width_X`, `crop_height_Y`, `min_area`, etc.) at their default values for a first run. See the **Parameters Guide** section below for full details.
+
+---
+
+### Step 4 — Run the pipeline
+
+No manual installation of Python packages is needed. The launcher scripts handle everything automatically (virtual environment creation + dependency installation + pipeline execution).
+
+**On Windows:**
+Double-click `run_windows.bat`, or from your terminal:
+```bat
+run_windows.bat
+```
+
+**On macOS / Linux:**
+From your terminal (make sure you are inside the project folder):
+```bash
+bash run_macOS_linux.sh
+```
+
+The script will:
+1. Create a Python virtual environment (`.venv/`) if it doesn't exist yet
+2. Install all required packages from `requirements.txt` (`opencv-python`, `numpy`, `matplotlib`, `Pillow`, `tqdm`)
+3. Launch `main.py`
+
+The terminal will stay open at the end so you can read the output.
+
+---
+
+### Step 5 — Follow the on-screen prompts
+
+`main.py` is interactive. It will ask you to:
+- Select a **primary reference hole** to act as the coordinate origin (0, 0)
+- Confirm parameters before processing begins
+
+Results (CSV files, plots, heatmaps) will be written to the `save_folder` you set in `config.json`.
+
+---
+
+## ⚙️ Quickstart Setup (existing users)
 
 You do not need to manually configure python or install packages. Run scripts from the project root:
 
