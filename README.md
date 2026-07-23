@@ -4,6 +4,101 @@ This software suite automates the detection, qualification, and spatial alignmen
 
 ---
 
+## 🔬 Profilometer Targeting — The Core Scientific Tool
+
+`profilo_target.py` is the most scientifically important script in this project. Once the detection pipeline has run and produced a crater database (JSON), this tool lets you click anywhere on a raw image and obtain the exact profilometer motor coordinates (in µm) needed to physically move the profilometer stage to that point. All detected craters are overlaid as cyan circles for reference.
+
+### Prerequisites
+
+- `main.py` must have been run at least once → it generates `all_data_<element>.json`
+- Raw scanner images must be accessible (path set in `config.json`)
+- The profilometer must be physically connected and calibrated
+
+### How to use it — Step by step
+
+**Step 1 — Activate the virtual environment and launch the script**
+
+On Windows:
+```bat
+.venv\Scripts\activate
+python profilo_target.py
+```
+On macOS/Linux:
+```bash
+source .venv/bin/activate
+python3 profilo_target.py
+```
+
+**Step 2 — Enter motor coordinates for R1**
+
+Navigate the profilometer stage to the centre of reference hole R1 (the hole you selected as origin when running `main.py`). Read the motor position displayed by the profilometer software and enter:
+```
+Enter motor X for R1 (µm): 21805
+Enter motor Y for R1 (µm): -21794
+```
+
+**Step 3 — Enter motor coordinates for R2**
+
+Navigate to reference hole R2 (the second reference hole). Enter its motor position:
+```
+Enter motor X for R2 (µm): -1637
+Enter motor Y for R2 (µm): 38563
+```
+The script computes the real physical rotation of the foil relative to the motor frame (δθ).
+
+**Step 4 — Enter the target image number**
+
+Specify which raw image contains the crater you want to target. You can use the short format:
+```
+Enter target image (e.g. '57 35' or '57-35' or 'MoEDAL-057-035.png'): 57 35
+```
+The script will pad the numbers automatically → `MoEDAL-057-035.png`.
+
+**Step 5 — Click on the point of interest in the interactive window**
+
+A matplotlib window opens with the raw image displayed. All detected craters are shown as **cyan circles**. The tool starts in **FREE mode** (click anywhere on the image).
+
+| Mode | Title bar shows | Behaviour |
+|---|---|---|
+| **FREE** (default) | `Mode: FREE (→ click position)` | Click anywhere — cross appears there, coords computed from click |
+| **SNAP** | `Mode: SNAP (→ nearest crater)` | Click snaps to the nearest detected crater in the database |
+
+Press **S** to toggle between the two modes at any time.
+
+Left-click to mark a point — the terminal immediately prints:
+- The click position in local pixels
+- Its position in the global stitched canvas (pixels)
+- Its **profilometer coordinates in µm**
+
+Right-click to close the window.
+
+**Step 6 — Read the final result**
+
+```
+=== FINAL TARGETING RESULT ===
+  → MOVE PROFILOMETER TO:
+     X = 15342.7 µm
+     Y = 8901.3 µm
+```
+Enter these coordinates into the profilometer motor controller to move the stage to the crater.
+
+### Transformation pipeline
+
+```
+Local pixel click (raw image, OpenCV convention)
+    ↓  local_to_global_px()    ← accounts for crop_width_X / crop_height_Y overlap
+Global pixel in full stitched canvas
+    ↓  pixel_to_profilometer()
+      1. Centre on R1_GLOBAL_PX
+      2. Flip Y  (image y↓ → physical y↑)
+      3. Multiply by pixel_resolution  (µm/px)
+      4. Rotate by δθ  (= θ_machine − θ_code)
+      5. Translate to R1 motor position
+Profilometer coordinates (µm)
+```
+
+---
+
 ## 🚀 Getting Started (from scratch)
 
 Follow these steps exactly if you are setting up this project for the first time on a new machine.
@@ -105,6 +200,17 @@ You do not need to manually configure python or install packages. Run scripts fr
 
 These runner scripts automatically create a virtual environment (`.venv`), install dependencies, and execute the main pipeline.
 
+To run the profilometer targeting tool after the pipeline has completed, activate the virtual environment manually and launch:
+```bash
+# macOS/Linux
+source .venv/bin/activate
+python3 profilo_target.py
+
+# Windows
+.venv\Scripts\activate
+python profilo_target.py
+```
+
 ---
 
 ## 📁 Repository Structure & File Map
@@ -115,12 +221,12 @@ These runner scripts automatically create a virtual environment (`.venv`), insta
 * [build_mosaics.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/build_mosaics.py) - Assembles the raw scanned images into local 3x3 tiles to make visual inspection of intermediate steps easier.
 * [image_processing.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/image_processing.py) - Low-level image utilities (loading, cropping, raw conversions).
 * [data_export.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/data_export.py) - Generates final CSV reports, histograms, and spatial heatmaps.
-* [profilo_target.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/profilo_target.py) - Maps coordinates between the stitched pixel grid and the profilometer mechanical stage.
+* [profilo_target.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/profilo_target.py) - **Primary scientific tool.** Interactive window: displays a raw image with all detected craters overlaid as cyan circles. Left-click to snap to the nearest crater and compute its exact profilometer motor coordinates (µm). Uses the same `local_to_global_px` → `pixel_to_profilometer` pipeline as `profilometer_recalibration.py`. Requires `main.py` to have been run first.
 * [config.json](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/config.json) - Contains the configuration parameters for the current sheet.
 
 ### Calibration Tools (`scripts/calibration/`)
 * [calculate_hole_positions.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/calibration/calculate_hole_positions.py) - Prints the exact global pixel coordinates of the reference holes in the stitched coordinate system.
-* [profilometer_recalibration.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/calibration/profilometer_recalibration.py) - Interactive tool: left-click on a defect (e.g. a scratch) in a raw image, and it outputs the exact absolute coordinates (X, Y in micrometers) to target it on the physical profilometer stage.
+* [profilometer_recalibration.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/calibration/profilometer_recalibration.py) - Free-click variant of the targeting tool for features that were **not detected** by the pipeline (e.g. scratches, manual points of interest). Unlike `profilo_target.py`, it does not snap to the crater database — you click anywhere on the raw image. R1/R2 global pixel coordinates and motor positions must be hardcoded at the top of the file before use.
 
 ### Presentation & Report Plots (`scripts/reports/`)
 * [generate_overlap_checks.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/reports/generate_overlap_checks.py) - Generates 4 overlap check figures (2 horizontal, 2 vertical) to visually verify border alignment.
@@ -131,7 +237,7 @@ These runner scripts automatically create a virtual environment (`.venv`), insta
 * [debug_clahe.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/debug/debug_clahe.py) - Compares crater detection with and without CLAHE (local illumination equalization).
 * [debug_filters.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/debug/debug_filters.py) - Side-by-side analysis of geometric, circularity, and intensity filters.
 * [test_detection_debug.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/debug/test_detection_debug.py) - Runs detection on a few sample images and outputs annotated images inside `scripts/debug_output/` (showing accepted/rejected contours in color).
-* [test_profilo_visual.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/debug/test_profilo_visual.py) - Interactive simulator validating the profilometer coordinate transformation.
+
 * [stitch_foil.py](file:///Users/julesloisance/Desktop/StageHelsinki/NTD-ellipse/scripts/debug/stitch_foil.py) - Stitches the full foil mosaic into one very large PNG file.
 
 ---
@@ -145,7 +251,7 @@ These runner scripts automatically create a virtual environment (`.venv`), insta
 * `crop_height_Y` (float): Vertical crop size in pixels to compensate for scanning overlap between adjacent rows.
 * `min_area` / `max_area` (int): Valid area range in pixels for the detected contours. Used to filter out dust or large defects.
 * `min_intensity` / `max_intensity` (int): Grayscale intensity range for ellipse pixels. Used to filter out bright surface spots.
-* `pixel_resolution` (float): Physical size of a pixel in micrometers per pixel (um/px). Used to scale pixel distances to physical millimeters.
+* `pixel_resolution` (float): Physical size of a pixel in micrometers per pixel (µm/px). Used to convert pixel distances into physical distances in µm.
 * `angle_tolerance` (float): Angular deviation threshold in degrees.
 
 ---

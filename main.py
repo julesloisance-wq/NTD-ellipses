@@ -204,6 +204,8 @@ def main():
     reference_system = {
         "r1_image": ref_image_name,
         "r2_image": r2_name,
+        "r1_local_px_x": int(ref_x0),   # pixel X local of R1 in its raw image (OpenCV convention, y from top)
+        "r1_local_px_y": int(ref_y0),   # pixel Y local of R1 in its raw image (OpenCV convention, y from top)
         "theta_code_radians": float(theta_code_rad),
         "distance_R1_R2_um": float(dist_theoretical_um)
     }   
