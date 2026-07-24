@@ -7,6 +7,86 @@ This project provides a full pipeline for processing MoEDAL NTD (Nuclear Track D
 
 ---
 
+## 🚀 Installation & First Run
+
+### Step 1 — Install the prerequisites
+
+- **Python 3.8+** → [python.org](https://www.python.org/downloads/) — on Windows, check **"Add Python to PATH"** during install
+- **Git** → [git-scm.com](https://git-scm.com/downloads)
+
+> VS Code is recommended as editor: [code.visualstudio.com](https://code.visualstudio.com/)
+
+### Step 2 — Clone the repository
+
+```bash
+git clone https://github.com/julesloisance-wq/NTD-ellipses
+cd NTD-ellipses
+```
+
+### Step 3 — Set up `config.json`
+
+Open `config.json` and fill in the three paths for your dataset:
+
+```json
+{
+  "folder_path": "/absolute/path/to/your/raw/images/root",
+  "element":     "subfolder_name_of_the_sheet_to_process",
+  "save_folder": "/absolute/path/where/results/will/be/saved",
+  ...
+}
+```
+
+- `folder_path` + `element`: raw images are expected at `folder_path/element/MoEDAL-xxx-yyy.png`
+- `save_folder`: all outputs written here (created automatically if it does not exist)
+
+> Leave the other parameters at their defaults for a first run. See the **Parameters Guide** section for details.
+
+### Step 4 — Run the pipeline
+
+No manual package installation needed — the launcher scripts do everything automatically.
+
+**On Windows:** double-click `run_windows.bat`
+
+**On macOS / Linux:**
+```bash
+bash run_macOS_linux.sh
+```
+
+This creates `.venv/`, installs all dependencies, and runs `main.py`.
+
+### Step 5 — Select the reference hole
+
+`main.py` will display a matplotlib window with detected reference hole candidates. Click on the one that should be the coordinate origin (R1). The pipeline then continues fully automatically.
+
+Results will be written to the `save_folder` you set in `config.json`.
+
+---
+
+## ⚙️ Quickstart (existing users)
+
+If the project is already set up, just run the launcher:
+
+```bash
+# macOS/Linux
+bash run_macOS_linux.sh
+
+# Windows
+run_windows.bat
+```
+
+To run the profilometer targeting tool:
+```bash
+# macOS/Linux
+source .venv/bin/activate
+python3 profilo_target.py
+
+# Windows
+.venv\Scripts\activate
+python profilo_target.py
+```
+
+---
+
 ## 🔬 What This Project Is About — Scientific Context
 
 When a high-energy heavy ion crosses a MoEDAL plastic NTD foil, it leaves a tiny damage trail. After chemical etching, this trail becomes a microscopic conical crater, typically a few micrometres wide. These craters are the physical signatures of the particles we are looking for.
@@ -18,6 +98,7 @@ But detecting a crater optically (2D image) is not enough. To measure its **dept
 This is what `profilo_target.py` does.
 
 ---
+
 
 ## 🎯 `profilo_target.py` — Targeting a Crater on the Profilometer
 
@@ -180,96 +261,6 @@ python3 main.py --annotate-json
 
 ---
 
-## 🚀 Getting Started (from scratch)
-
-Follow these steps exactly if you are setting up this project for the first time on a new machine.
-
-### Step 1 — Install the prerequisites
-
-You need two things installed on your machine before anything else:
-
-- **Python 3.8+** → Download from [python.org](https://www.python.org/downloads/)
-  - On Windows: during installation, **check the box "Add Python to PATH"**
-  - Verify it works: open a terminal and type `python --version` (Windows) or `python3 --version` (macOS/Linux)
-- **Git** → Download from [git-scm.com](https://git-scm.com/downloads)
-  - Verify it works: open a terminal and type `git --version`
-
-> VS Code is recommended as your code editor. Install it from [code.visualstudio.com](https://code.visualstudio.com/).
-
----
-
-### Step 2 — Clone the repository
-
-Open a terminal and run:
-
-```bash
-git clone https://github.com/julesloisance-wq/NTD-ellipses
-cd NTD-ellipses
-```
-
----
-
-### Step 3 — Set up `config.json`
-
-Open `config.json` and fill in the three paths for your dataset:
-
-```json
-{
-  "folder_path": "/absolute/path/to/your/raw/images/root",
-  "element":     "subfolder_name_of_the_sheet_to_process",
-  "save_folder": "/absolute/path/where/results/will/be/saved",
-  ...
-}
-```
-
-- `folder_path` + `element`: the raw images are expected at `folder_path/element/MoEDAL-xxx-yyy.png`
-- `save_folder`: all outputs will be written here (created automatically if it doesn't exist)
-
-> Leave the other parameters at their default values for a first run. See the **Parameters Guide** section for details.
-
----
-
-### Step 4 — Run the pipeline
-
-**On Windows:** double-click `run_windows.bat`
-
-**On macOS / Linux:**
-```bash
-bash run_macOS_linux.sh
-```
-
-The launcher will create `.venv/`, install dependencies, and run `main.py` automatically.
-
----
-
-### Step 5 — Select the reference hole
-
-`main.py` will display a matplotlib window with the detected reference hole candidates. Click on the one that should be the coordinate origin (R1). The pipeline then continues automatically.
-
-Results will be written to the `save_folder` you set in `config.json`.
-
----
-
-## ⚙️ Quickstart (existing users)
-
-If you already have the project set up, just run the launcher:
-
-```bash
-# macOS/Linux
-bash run_macOS_linux.sh
-
-# Windows
-run_windows.bat
-```
-
-To run the profilometer targeting tool after the pipeline, activate the virtual environment:
-```bash
-# macOS/Linux
-source .venv/bin/activate
-python3 profilo_target.py
-
-# Windows
-.venv\Scripts\activate
 python profilo_target.py
 ```
 
