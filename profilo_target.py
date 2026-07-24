@@ -31,6 +31,18 @@ import os
 import matplotlib.pyplot as plt
 
 
+# ===========================================================================
+# PARAMETERS — MODIFY AS NEEDED FOR EACH SESSION
+# ===========================================================================
+
+# Motor coordinates of the reference holes in the profilometer frame (µm).
+# Read these values directly from the profilometer stage display after
+# centering the objective on each reference hole.
+R1_MOTOR = {"x": 21805, "y": -21794}   # e.g. MoEDAL-042-040.png
+R2_MOTOR = {"x": -1637,  "y":  38563}   # e.g. MoEDAL-057-045.png
+
+# ===========================================================================
+
 # ---------------------------------------------------------------------------
 # COORDINATE TRANSFORMATION FUNCTIONS
 # (exact copies from scripts/calibration/profilometer_recalibration.py)
@@ -183,22 +195,18 @@ def main():
     print(f"θ_code           : {math.degrees(theta_code):.3f}°")
     print(f"Pixel resolution : {pixel_resolution} µm/px\n")
 
-    # --- Motor coordinates of R1 and R2 (in µm) ---
-    print("Aim at the centre of reference hole R1 on the profilometer stage.")
-    x_m1 = float(input("  Enter motor X for R1 (µm): "))
-    y_m1 = float(input("  Enter motor Y for R1 (µm): "))
-    R1_PROF = {"x": x_m1, "y": y_m1}
-
-    print("\nMove to reference hole R2.")
-    x_m2 = float(input("  Enter motor X for R2 (µm): "))
-    y_m2 = float(input("  Enter motor Y for R2 (µm): "))
+    # --- Motor coordinates from hardcoded PARAMETERS section ---
+    R1_PROF = R1_MOTOR
+    x_m2, y_m2 = R2_MOTOR["x"], R2_MOTOR["y"]
 
     # theta_machine: angle of R1→R2 vector in the physical (Cartesian, y-up) motor frame
-    theta_machine = math.atan2(y_m2 - y_m1, x_m2 - x_m1)
+    theta_machine = math.atan2(y_m2 - R1_PROF["y"], x_m2 - R1_PROF["x"])
     # delta_theta: rotation to apply when transforming pixels → profilometer coords
     delta_theta   = theta_machine - theta_code
 
-    print(f"\n[INFO] θ_machine = {math.degrees(theta_machine):.3f}°  (R1→R2 in motor frame)")
+    print(f"[INFO] R1 motor  : ({R1_PROF['x']}, {R1_PROF['y']}) µm")
+    print(f"[INFO] R2 motor  : ({x_m2}, {y_m2}) µm")
+    print(f"[INFO] θ_machine = {math.degrees(theta_machine):.3f}°  (R1→R2 in motor frame)")
     print(f"[INFO] θ_code    = {math.degrees(theta_code):.3f}°  (R1→R2 in pixel frame)")
     print(f"[INFO] δθ (foil tilt) = {math.degrees(delta_theta):.3f}°\n")
 
